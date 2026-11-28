@@ -302,3 +302,33 @@ fn suggest_keeps_more_than_three_per_kind() {
     let body = json!({"code": 200, "result": {"order": ["songs"], "songs": songs}});
     assert_eq!(parse_suggest(&body).len(), 6);
 }
+
+/// R4(2026-11-28): **一次联想 = 恒定 1 次上游**。
+///
+/// 以前 suggest + 补图各一次(新词/首字时每按键 2 个请求), 落在风控最敏感的路线上。
+/// 现在补图走后台预热: 返回时上游只被打过 1 次, 缺封面留到下一次按键补上。
+#[tokio::test]
+async fn suggest_is_one_upstream_request_even_when_covers_are_missing() {
+    use crate::netease::tests::cloud::CountingHttp;
+    let http = CountingHttp::start(
+        200,
+        r#"{"code":200,"result":{"order":["songs"],"songs":[{"id":1,"name":"晴天","artists":[{"name":"周杰伦"}],"album":{}}]}}"#,
+    );
+    let p = NeteaseProvider::with_domain_for_test(Session::default(), http.base());
+    let items = tokio::time::timeout(std::time::Duration::from_secs(10), p.search_suggest("晴天"))
+        .await
+        .expect("假服务应在超时内回包")
+        .expect("联想应成功");
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].kind, "song");
+    assert!(
+        items[0].cover_url.is_none(),
+        "本次结果不等待补图(补图是后台预热)"
+    );
+    assert_eq!(
+        http.hits(),
+        1,
+        "一次联想只能打 1 次上游 —— 补图又回到请求路径上了"
+    );
+    let _ = http.finish();
+}

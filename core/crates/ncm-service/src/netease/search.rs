@@ -49,7 +49,7 @@ impl NeteaseProvider {
                 .await?;
             let followed = self.suggest_followed_artist_ids().await;
             let mut items = rank_suggest(parse_suggest_groups(&body), &followed);
-            self.fill_suggest_song_covers(&mut items).await;
+            self.fill_suggest_song_covers(&mut items);
             Ok(items)
         })
     }
@@ -83,10 +83,15 @@ impl NeteaseProvider {
         ids.into_iter().collect()
     }
 
-    /// 给联想里缺封面的单曲补专辑封面: 一次 song_detail 批量请求, 结果按 id 缓存.
+    /// 给联想里缺封面的单曲补专辑封面.
     ///
-    /// 失败一律静默(联想是输入路径上的可选增强, 不能因为补图失败就不出建议).
-    async fn fill_suggest_song_covers(&self, items: &mut [SuggestItem]) {
+    /// **一次联想 = 恒定 1 次上游**(R4, 2026-11-28): 补图**不再**在请求路径上等 ——
+    /// 本次只用正向缓存里已有的封面, 缺的那些丢给后台预热(`tokio::spawn`),
+    /// 下一次按键(同一个词/下一位)就补上。原因: 联想是每按键一次的高频路径,
+    /// `song_detail` 又落在风控最敏感的端点上, 多打一次就是多一分 405。
+    ///
+    /// 失败一律静默(联想是输入路径上的可选增强, 不能因为补图失败就不出建议)。
+    fn fill_suggest_song_covers(&self, items: &mut [SuggestItem]) {
         let mut missing: Vec<u64> = Vec::new();
         for item in items.iter() {
             if item.kind == "song" && item.cover_url.is_none() && !missing.contains(&item.id) {
@@ -96,7 +101,7 @@ impl NeteaseProvider {
         if missing.is_empty() {
             return;
         }
-        let mut resolved: std::collections::HashMap<u64, String> = {
+        let resolved: std::collections::HashMap<u64, String> = {
             let cache = self
                 .suggest_covers
                 .read()
@@ -106,6 +111,7 @@ impl NeteaseProvider {
                 .filter_map(|id| cache.get(id).map(|url| (*id, url.clone())))
                 .collect()
         };
+        // 缓存里没有的: 只排一次批量预热, 本次不等待
         let fetch: Vec<u64> = missing
             .iter()
             .copied()
@@ -113,28 +119,7 @@ impl NeteaseProvider {
             .take(10)
             .collect();
         if !fetch.is_empty() {
-            let ids = fetch
-                .iter()
-                .map(u64::to_string)
-                .collect::<Vec<_>>()
-                .join(",");
-            if let Ok(songs) = self.songs_detail(&ids).await {
-                for song in songs {
-                    if let Some(url) = song.album.and_then(|a| a.pic_url) {
-                        resolved.insert(song.id.0, url);
-                    }
-                }
-            }
-            let mut cache = self
-                .suggest_covers
-                .write()
-                .unwrap_or_else(|e| e.into_inner());
-            if cache.len() + resolved.len() > 500 {
-                cache.clear();
-            }
-            for (id, url) in resolved.iter() {
-                cache.insert(*id, url.clone());
-            }
+            self.spawn_suggest_cover_warmup(fetch);
         }
         for item in items.iter_mut() {
             if item.kind == "song" && item.cover_url.is_none() {
@@ -143,6 +128,44 @@ impl NeteaseProvider {
                 }
             }
         }
+    }
+
+    /// 后台预热联想补图: 拿一份快照(client/域名/UA/cookie)与缓存句柄, 不借用 `&self`.
+    ///
+    /// 快照是刻意的: 会话在预热期间变了(登录/切号), 写回的是**旧账号**才看得到的
+    /// 公开封面 URL —— 封面与账号无关, 不影响正确性; 缓存本身也会在 `update_session` 清空,
+    /// 最坏情况只是白跑一次请求。
+    fn spawn_suggest_cover_warmup(&self, ids: Vec<u64>) {
+        let (client, domain, ua, cookie) = self.snapshot();
+        let covers = Arc::clone(&self.suggest_covers);
+        tokio::spawn(async move {
+            let ids = ids.iter().map(u64::to_string).collect::<Vec<_>>().join(",");
+            let q = make_query(&cookie, &domain, &ua).param("ids", &ids);
+            let Ok(resp) = client.song_detail(&q).await else {
+                return;
+            };
+            if check_body(&resp.body).is_err() {
+                return;
+            }
+            let fresh: Vec<(u64, String)> = parse_song_list(&resp.body)
+                .into_iter()
+                .filter_map(|song| {
+                    song.album
+                        .and_then(|a| a.pic_url)
+                        .map(|url| (song.id.0, url))
+                })
+                .collect();
+            if fresh.is_empty() {
+                return;
+            }
+            let mut cache = covers.write().unwrap_or_else(|e| e.into_inner());
+            if cache.len() + fresh.len() > 500 {
+                cache.clear();
+            }
+            for (id, url) in fresh {
+                cache.insert(id, url);
+            }
+        });
     }
 
     /// 联想下拉的纯关键词候选(type=mobile 分支, /api/search/suggest/keyword).

@@ -1,6 +1,7 @@
 //! 专辑域: 专辑详情/新碟/订阅.
 
 use super::*;
+use crate::read_cache::endpoint;
 
 impl NeteaseProvider {
     /// 我收藏的专辑: 响应 {code, data:[{id,name,picUrl,artist:{name},size}], hasMore}
@@ -50,12 +51,21 @@ impl NeteaseProvider {
     ) -> BoxFuture<'_, ProviderResult<Vec<AlbumItem>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua)
-                .param("limit", &limit.to_string())
-                .param("offset", &offset.to_string());
-            let resp = client.album_new(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_album_items(&resp.body))
+            let body = self
+                .cached_body(
+                    endpoint::NEW_ALBUMS,
+                    &[("limit", limit.to_string()), ("offset", offset.to_string())],
+                    || async {
+                        let q = make_query(&cookie, &domain, &ua)
+                            .param("limit", &limit.to_string())
+                            .param("offset", &offset.to_string());
+                        let resp = client.album_new(&q).await.map_err(map_error)?;
+                        check_body(&resp.body)?;
+                        Ok(resp.body)
+                    },
+                )
+                .await?;
+            Ok(parse_album_items(&body))
         })
     }
 
@@ -66,10 +76,16 @@ impl NeteaseProvider {
     ) -> BoxFuture<'_, ProviderResult<Vec<AlbumItem>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua);
-            let resp = client.album_newest(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            let mut out = parse_album_items(&resp.body);
+            // 上游固定回 12 张, `limit` 只是本地截断 ⇒ 不进缓存 key(否则同页多个 limit 各存一份).
+            let body = self
+                .cached_body(endpoint::NEWEST_ALBUMS, &[], || async {
+                    let q = make_query(&cookie, &domain, &ua);
+                    let resp = client.album_newest(&q).await.map_err(map_error)?;
+                    check_body(&resp.body)?;
+                    Ok(resp.body)
+                })
+                .await?;
+            let mut out = parse_album_items(&body);
             out.truncate(limit as usize);
             Ok(out)
         })
@@ -84,13 +100,22 @@ impl NeteaseProvider {
     ) -> BoxFuture<'a, ProviderResult<Vec<AlbumItem>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua)
-                .param("area", album_area_code(area))
-                .param("limit", &limit.to_string())
-                .param("offset", "0");
-            let resp = client.top_album(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_new_albums(&resp.body, limit))
+            let body = self
+                .cached_body(
+                    endpoint::TOP_ALBUMS,
+                    &[("area", album_area_code(area).to_string())],
+                    || async {
+                        let q = make_query(&cookie, &domain, &ua)
+                            .param("area", album_area_code(area))
+                            .param("limit", &limit.to_string())
+                            .param("offset", "0");
+                        let resp = client.top_album(&q).await.map_err(map_error)?;
+                        check_body(&resp.body)?;
+                        Ok(resp.body)
+                    },
+                )
+                .await?;
+            Ok(parse_new_albums(&body, limit))
         })
     }
 

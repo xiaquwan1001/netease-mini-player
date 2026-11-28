@@ -1,4 +1,5 @@
-use std::sync::RwLock;
+use std::future::Future;
+use std::sync::{Arc, RwLock};
 
 use ncm_api_rs::{ApiClient, CryptoType, NcmError, Query, RequestOption};
 use ncm_domain::{
@@ -80,7 +81,11 @@ pub struct NeteaseProvider {
     /// 建议接口的歌曲只回 album.picId(纯数字), 不回 picUrl, 所以 UI 上联想列表的
     /// 单曲只能显示占位图标(用户反馈「图片没有真正加载」). 这里按 id 缓存一次
     /// song_detail 里查到的专辑封面, 只补真正缺图的那几条.
-    suggest_covers: RwLock<std::collections::HashMap<u64, String>>,
+    /// 联想补图用的「歌曲 id → 专辑封面」正向缓存.
+    ///
+    /// `Arc` 是为了让补图预热能 `tokio::spawn` 到后台(R4: 一次联想 = 恒定 1 次上游,
+    /// 补图不再占用户的按键路径).
+    suggest_covers: Arc<RwLock<std::collections::HashMap<u64, String>>>,
 }
 
 struct Inner {
@@ -132,7 +137,7 @@ impl NeteaseProvider {
             inner: RwLock::new(Inner::new(session, domain, ua)),
             cache: crate::read_cache::ReadCache::default(),
             followed_artists: RwLock::new(None),
-            suggest_covers: RwLock::new(std::collections::HashMap::new()),
+            suggest_covers: Arc::new(RwLock::new(std::collections::HashMap::new())),
         }
     }
 
@@ -144,7 +149,7 @@ impl NeteaseProvider {
             inner: RwLock::new(Inner::new(session, Some(domain), None)),
             cache: crate::read_cache::ReadCache::default(),
             followed_artists: RwLock::new(None),
-            suggest_covers: RwLock::new(std::collections::HashMap::new()),
+            suggest_covers: Arc::new(RwLock::new(std::collections::HashMap::new())),
         }
     }
 
@@ -168,6 +173,28 @@ impl NeteaseProvider {
     /// 只读接口的响应缓存(各能力模块统一走这里).
     pub(super) fn read_cache(&self) -> &crate::read_cache::ReadCache {
         &self.cache
+    }
+
+    /// 公开只读接口的缓存入口: 一次 body 取回就顺手过白名单校验 + 同 key 单飞.
+    ///
+    /// 存在的意义是让「新增一个可缓存端点」变成一行接线而不是一段样板 ——
+    /// `endpoint` 不在 [`crate::read_cache::CACHEABLE_ENDPOINTS`] 里时它照旧透传
+    /// (不缓存), 所以**没资格缓存的接口也安全**: 白名单是本文件之外的唯一闸门.
+    ///
+    /// 纪律: `load` 里必须只包含与账号无关的只读请求, 且**成功才缓存**
+    /// (`check_body` 要放在 `load` 内, 错误不外溢成缓存条目).
+    pub(super) async fn cached_body<F, Fut>(
+        &self,
+        endpoint: &str,
+        params: &[(&str, String)],
+        load: F,
+    ) -> ProviderResult<Arc<Value>>
+    where
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = ProviderResult<Value>>,
+    {
+        let key = crate::read_cache::cache_key(endpoint, params);
+        self.read_cache().get_or_load(endpoint, &key, load).await
     }
 
     /// 传 0 表示"用当前账号"

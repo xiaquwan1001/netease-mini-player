@@ -1,6 +1,7 @@
 //! 电台域: 播客/声音/电台榜单与订阅.
 
 use super::*;
+use crate::read_cache::endpoint;
 
 impl NeteaseProvider {
     /// 热门播客/电台
@@ -10,10 +11,20 @@ impl NeteaseProvider {
     ) -> BoxFuture<'_, ProviderResult<Vec<PodcastRadio>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua).param("limit", &limit.to_string());
-            let resp = client.dj_hot(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_podcast_hot(&resp.body))
+            let body = self
+                .cached_body(
+                    endpoint::RADIO_HOT,
+                    &[("limit", limit.to_string())],
+                    || async {
+                        let q =
+                            make_query(&cookie, &domain, &ua).param("limit", &limit.to_string());
+                        let resp = client.dj_hot(&q).await.map_err(map_error)?;
+                        check_body(&resp.body)?;
+                        Ok(resp.body)
+                    },
+                )
+                .await?;
+            Ok(parse_podcast_hot(&body))
         })
     }
 
@@ -29,13 +40,26 @@ impl NeteaseProvider {
             if radio_id == 0 {
                 return Err(ProviderError::not_found("radio id 为空"));
             }
-            let q = make_query(&cookie, &domain, &ua)
-                .param("rid", &radio_id.to_string())
-                .param("limit", &limit.to_string())
-                .param("offset", &offset.to_string());
-            let resp = client.dj_program(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_podcast_programs(&resp.body))
+            let body = self
+                .cached_body(
+                    endpoint::RADIO_PROGRAMS,
+                    &[
+                        ("rid", radio_id.to_string()),
+                        ("limit", limit.to_string()),
+                        ("offset", offset.to_string()),
+                    ],
+                    || async {
+                        let q = make_query(&cookie, &domain, &ua)
+                            .param("rid", &radio_id.to_string())
+                            .param("limit", &limit.to_string())
+                            .param("offset", &offset.to_string());
+                        let resp = client.dj_program(&q).await.map_err(map_error)?;
+                        check_body(&resp.body)?;
+                        Ok(resp.body)
+                    },
+                )
+                .await?;
+            Ok(parse_podcast_programs(&body))
         })
     }
 
@@ -46,10 +70,20 @@ impl NeteaseProvider {
     ) -> BoxFuture<'_, ProviderResult<PodcastProgram>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua).param("id", &program_id.to_string());
-            let resp = client.dj_program_detail(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            parse_podcast_program(&resp.body)
+            let body = self
+                .cached_body(
+                    endpoint::RADIO_PROGRAM_DETAIL,
+                    &[("id", program_id.to_string())],
+                    || async {
+                        let q =
+                            make_query(&cookie, &domain, &ua).param("id", &program_id.to_string());
+                        let resp = client.dj_program_detail(&q).await.map_err(map_error)?;
+                        check_body(&resp.body)?;
+                        Ok(resp.body)
+                    },
+                )
+                .await?;
+            parse_podcast_program(&body)
         })
     }
 
@@ -172,10 +206,20 @@ impl NeteaseProvider {
             if radio_id == 0 {
                 return Err(ProviderError::not_found("radio id 为空"));
             }
-            let q = make_query(&cookie, &domain, &ua).param("rid", &radio_id.to_string());
-            let resp = client.dj_detail(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            parse_podcast_radio_detail(&resp.body)
+            let body = self
+                .cached_body(
+                    endpoint::RADIO_DETAIL,
+                    &[("rid", radio_id.to_string())],
+                    || async {
+                        let q =
+                            make_query(&cookie, &domain, &ua).param("rid", &radio_id.to_string());
+                        let resp = client.dj_detail(&q).await.map_err(map_error)?;
+                        check_body(&resp.body)?;
+                        Ok(resp.body)
+                    },
+                )
+                .await?;
+            parse_podcast_radio_detail(&body)
         })
     }
 

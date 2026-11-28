@@ -1,6 +1,7 @@
 //! 歌单域: 歌单读写/分类/详情/订阅.
 
 use super::*;
+use crate::read_cache::endpoint;
 
 impl NeteaseProvider {
     /// 歌单分类: 响应形如 {code, categories:{0:"语种",...}, sub:[{category:0,name:"华语"},...]}
@@ -9,10 +10,15 @@ impl NeteaseProvider {
     ) -> BoxFuture<'_, ProviderResult<Vec<PlaylistCategory>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua);
-            let resp = client.playlist_catlist(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_playlist_categories(&resp.body))
+            let body = self
+                .cached_body(endpoint::PLAYLIST_CATEGORIES, &[], || async {
+                    let q = make_query(&cookie, &domain, &ua);
+                    let resp = client.playlist_catlist(&q).await.map_err(map_error)?;
+                    check_body(&resp.body)?;
+                    Ok(resp.body)
+                })
+                .await?;
+            Ok(parse_playlist_categories(&body))
         })
     }
 
@@ -25,14 +31,27 @@ impl NeteaseProvider {
     ) -> BoxFuture<'a, ProviderResult<Vec<Playlist>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua)
-                .param("cat", if cat.is_empty() { "全部" } else { cat })
-                .param("limit", &limit.to_string())
-                .param("offset", &offset.to_string())
-                .param("order", "hot");
-            let resp = client.top_playlist(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_playlist_bucket(&resp.body, "playlists"))
+            let body = self
+                .cached_body(
+                    endpoint::CATEGORY_PLAYLISTS,
+                    &[
+                        ("cat", if cat.is_empty() { "全部" } else { cat }.to_string()),
+                        ("limit", limit.to_string()),
+                        ("offset", offset.to_string()),
+                    ],
+                    || async {
+                        let q = make_query(&cookie, &domain, &ua)
+                            .param("cat", if cat.is_empty() { "全部" } else { cat })
+                            .param("limit", &limit.to_string())
+                            .param("offset", &offset.to_string())
+                            .param("order", "hot");
+                        let resp = client.top_playlist(&q).await.map_err(map_error)?;
+                        check_body(&resp.body)?;
+                        Ok(resp.body)
+                    },
+                )
+                .await?;
+            Ok(parse_playlist_bucket(&body, "playlists"))
         })
     }
 
@@ -44,15 +63,27 @@ impl NeteaseProvider {
     ) -> BoxFuture<'a, ProviderResult<Vec<Playlist>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua)
-                .param("cat", if cat.is_empty() { "全部" } else { cat })
-                .param("limit", &limit.to_string());
-            let resp = client
-                .top_playlist_highquality(&q)
-                .await
-                .map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_playlist_bucket(&resp.body, "playlists"))
+            let body = self
+                .cached_body(
+                    endpoint::HIGH_QUALITY_PLAYLISTS,
+                    &[
+                        ("cat", if cat.is_empty() { "全部" } else { cat }.to_string()),
+                        ("limit", limit.to_string()),
+                    ],
+                    || async {
+                        let q = make_query(&cookie, &domain, &ua)
+                            .param("cat", if cat.is_empty() { "全部" } else { cat })
+                            .param("limit", &limit.to_string());
+                        let resp = client
+                            .top_playlist_highquality(&q)
+                            .await
+                            .map_err(map_error)?;
+                        check_body(&resp.body)?;
+                        Ok(resp.body)
+                    },
+                )
+                .await?;
+            Ok(parse_playlist_bucket(&body, "playlists"))
         })
     }
 

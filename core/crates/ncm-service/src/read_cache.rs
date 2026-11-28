@@ -76,6 +76,49 @@ pub mod endpoint {
     pub const LYRIC: &str = "lyric";
     /// 逐字歌词(/api/song/lyric/v1, yrc)
     pub const LYRIC_NEW: &str = "lyric_new";
+    // ---- R5(2026-11-28): 公开只读端点扩容 ----
+    /// 歌手全部歌曲分页(artist_songs)
+    pub const ARTIST_SONGS: &str = "artist_songs";
+    /// 歌手专辑分页(artist_album)
+    pub const ARTIST_ALBUMS: &str = "artist_albums";
+    /// 歌手 MV 分页(artist_mv)
+    pub const ARTIST_MVS: &str = "artist_mvs";
+    /// 歌手头部资料(artist/head/detail)
+    pub const ARTIST_DETAIL: &str = "artist_detail";
+    /// 歌手热门歌曲(artist/top/song)
+    pub const ARTIST_TOP_SONG: &str = "artist_top_song";
+    /// 热门歌手榜(top/artists)
+    pub const HOT_ARTISTS: &str = "hot_artists";
+    /// 相似歌手(simi_artist)
+    pub const SIMILAR_ARTISTS: &str = "similar_artists";
+    /// MV 详情(mv/detail)
+    pub const MV_DETAIL: &str = "mv_detail";
+    /// 播客/电台详情(dj/detail)
+    pub const RADIO_DETAIL: &str = "radio_detail";
+    /// 播客节目列表(dj/program)
+    pub const RADIO_PROGRAMS: &str = "radio_programs";
+    /// 单个节目详情(dj/program/detail)
+    pub const RADIO_PROGRAM_DETAIL: &str = "radio_program_detail";
+    /// 热门播客/电台(dj/hot)
+    pub const RADIO_HOT: &str = "radio_hot";
+    /// 榜单目录 v1(toplist/detail)
+    pub const CHARTS: &str = "charts";
+    /// 榜单目录 v2(toplist/detail/v2)
+    pub const TOPLIST_CATALOG: &str = "toplist_catalog";
+    /// 新歌速递(personalized/newsong)
+    pub const NEW_SONGS: &str = "new_songs";
+    /// 新碟上架(album/new)
+    pub const NEW_ALBUMS: &str = "new_albums";
+    /// 最新专辑(album/newest)
+    pub const NEWEST_ALBUMS: &str = "newest_albums";
+    /// 新碟上架按地区(top/album)
+    pub const TOP_ALBUMS: &str = "top_albums";
+    /// 歌单分类(playlist/catlist)
+    pub const PLAYLIST_CATEGORIES: &str = "playlist_categories";
+    /// 分类歌单(playlist/list)
+    pub const CATEGORY_PLAYLISTS: &str = "category_playlists";
+    /// 精品歌单(playlist/highquality/list)
+    pub const HIGH_QUALITY_PLAYLISTS: &str = "high_quality_playlists";
 }
 
 /// 允许进缓存的接口白名单 —— **本文件唯一的放行表**。
@@ -90,6 +133,14 @@ pub mod endpoint {
 ///   "刚删掉的歌还在"(会话变更/主动刷新都会清)。
 /// - album_detail: 同 playlist_detail, 专辑详情是纯公开数据。
 /// - lyric / lyric_new: 歌词内容几乎不变, 播放页/滚动/切歌会反复取。
+/// - **R5 扩容(艺人/播客/MV/榜单/新歌/分类, 2026-11-28)**: artist_songs / artist_albums /
+///   artist_mvs / artist_detail / artist_top_song / hot_artists / similar_artists /
+///   mv_detail / radio_detail / radio_programs / radio_program_detail / radio_hot /
+///   charts / toplist_catalog / new_songs / new_albums / newest_albums / top_albums /
+///   playlist_categories / category_playlists / high_quality_playlists —— 全是公开只读数据
+///   (艺人进页 3–4 个请求、回退重进就再打一轮, 是 405 的次要来源)。参数只有 id/分页/地区,
+///   5 分钟 TTL 内榜单/新歌的变化用户无感; 会话变更仍整体清空。
+///   注意 `similar_songs`: body 带按账号算的 `privileges`, 与 song_detail 同罪, **不进**。
 ///
 /// **刻意不缓存**(需要账号上下文或变化太快, 缓存会串号或给过期结论):
 /// user_playlist / user_detail / user_account / user_subcount / user_follows /
@@ -108,6 +159,27 @@ pub const CACHEABLE_ENDPOINTS: &[&str] = &[
     endpoint::ALBUM_DETAIL,
     endpoint::LYRIC,
     endpoint::LYRIC_NEW,
+    endpoint::ARTIST_SONGS,
+    endpoint::ARTIST_ALBUMS,
+    endpoint::ARTIST_MVS,
+    endpoint::ARTIST_DETAIL,
+    endpoint::ARTIST_TOP_SONG,
+    endpoint::HOT_ARTISTS,
+    endpoint::SIMILAR_ARTISTS,
+    endpoint::MV_DETAIL,
+    endpoint::RADIO_DETAIL,
+    endpoint::RADIO_PROGRAMS,
+    endpoint::RADIO_PROGRAM_DETAIL,
+    endpoint::RADIO_HOT,
+    endpoint::CHARTS,
+    endpoint::TOPLIST_CATALOG,
+    endpoint::NEW_SONGS,
+    endpoint::NEW_ALBUMS,
+    endpoint::NEWEST_ALBUMS,
+    endpoint::TOP_ALBUMS,
+    endpoint::PLAYLIST_CATEGORIES,
+    endpoint::CATEGORY_PLAYLISTS,
+    endpoint::HIGH_QUALITY_PLAYLISTS,
 ];
 
 /// 该接口是否允许缓存(白名单命中)。
@@ -496,6 +568,27 @@ mod tests {
             endpoint::ALBUM_DETAIL,
             endpoint::LYRIC,
             endpoint::LYRIC_NEW,
+            endpoint::ARTIST_SONGS,
+            endpoint::ARTIST_ALBUMS,
+            endpoint::ARTIST_MVS,
+            endpoint::ARTIST_DETAIL,
+            endpoint::ARTIST_TOP_SONG,
+            endpoint::HOT_ARTISTS,
+            endpoint::SIMILAR_ARTISTS,
+            endpoint::MV_DETAIL,
+            endpoint::RADIO_DETAIL,
+            endpoint::RADIO_PROGRAMS,
+            endpoint::RADIO_PROGRAM_DETAIL,
+            endpoint::RADIO_HOT,
+            endpoint::CHARTS,
+            endpoint::TOPLIST_CATALOG,
+            endpoint::NEW_SONGS,
+            endpoint::NEW_ALBUMS,
+            endpoint::NEWEST_ALBUMS,
+            endpoint::TOP_ALBUMS,
+            endpoint::PLAYLIST_CATEGORIES,
+            endpoint::CATEGORY_PLAYLISTS,
+            endpoint::HIGH_QUALITY_PLAYLISTS,
         ] {
             assert!(is_cacheable(ep), "{ep} 应在白名单里");
         }
@@ -511,6 +604,12 @@ mod tests {
             "playlist_subscribe",
             "song_like_state",
             "song_detail",
+            // R5 排除项: body 带按账号算的 privileges, 与 song_detail 同罪
+            "similar_songs",
+            // 直链类: 带过期时间/按账号档位, 缓存会播到 403
+            "song_url",
+            "mv_url",
+            "song_cloud_download",
             "comment_music",
             "msg_private",
             "vip_info",

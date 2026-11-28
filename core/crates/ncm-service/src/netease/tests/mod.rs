@@ -7,6 +7,7 @@ mod comment;
 mod community;
 mod playlist;
 mod radio;
+mod read_cache_wiring;
 mod search;
 mod search_mv;
 mod song;

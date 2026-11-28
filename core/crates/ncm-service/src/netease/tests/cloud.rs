@@ -200,6 +200,60 @@ impl CapturedRequest {
     }
 }
 
+/// 读一个 HTTP 请求(先读头到 CRLF CRLF, 再按 Content-Length 读 body).
+fn read_request(stream: &mut std::net::TcpStream) -> CapturedRequest {
+    use std::io::Read;
+    stream
+        .set_read_timeout(Some(std::time::Duration::from_secs(10)))
+        .expect("设读超时");
+    let mut raw = Vec::new();
+    let mut buf = [0u8; 4096];
+    let header_end = loop {
+        if let Some(pos) = raw.windows(4).position(|w| w == b"\r\n\r\n") {
+            break pos + 4;
+        }
+        let n = stream.read(&mut buf).expect("读请求头");
+        assert!(n > 0, "客户端在请求头读完前断开");
+        raw.extend_from_slice(&buf[..n]);
+    };
+    let head = String::from_utf8_lossy(&raw[..header_end]).to_string();
+    let mut lines = head.split("\r\n");
+    let request_line = lines.next().unwrap_or_default().to_string();
+    let headers: Vec<(String, String)> = lines
+        .filter(|l| !l.is_empty())
+        .filter_map(|l| l.split_once(':'))
+        .map(|(k, v)| (k.trim().to_ascii_lowercase(), v.trim().to_string()))
+        .collect();
+    let content_length: usize = headers
+        .iter()
+        .find(|(k, _)| k == "content-length")
+        .and_then(|(_, v)| v.parse().ok())
+        .unwrap_or(0);
+    let mut body = raw[header_end..].to_vec();
+    while body.len() < content_length {
+        let n = stream.read(&mut buf).expect("读 body");
+        assert!(n > 0, "body 没读完客户端就断开了");
+        body.extend_from_slice(&buf[..n]);
+    }
+    body.truncate(content_length);
+    CapturedRequest {
+        request_line,
+        headers,
+        body,
+    }
+}
+
+/// 回一个固定 status/body 的包, 然后关连接.
+fn write_response(stream: &mut std::net::TcpStream, status: u16, response_body: &str) {
+    use std::io::Write;
+    let response = format!(
+        "HTTP/1.1 {status} X\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{response_body}",
+        response_body.len()
+    );
+    stream.write_all(response.as_bytes()).expect("回包");
+    stream.flush().ok();
+}
+
 /// 起一个只听 127.0.0.1 的假 HTTP 服务: 收**一个**请求, 按 `status`/`body` 回包.
 /// 返回 (base_url, join handle → 捕获到的请求).
 /// 云盘上传与听歌排行(provider 端到端)共用；不联网、不读环境变量。
@@ -207,58 +261,82 @@ pub(super) fn spawn_fake_http(
     status: u16,
     response_body: &'static str,
 ) -> (String, std::thread::JoinHandle<CapturedRequest>) {
-    use std::io::{Read, Write};
     let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("绑定本地端口");
     let addr = listener.local_addr().expect("取本地端口");
     let handle = std::thread::spawn(move || {
         let (mut stream, _) = listener.accept().expect("接受连接");
-        stream
-            .set_read_timeout(Some(std::time::Duration::from_secs(10)))
-            .expect("设读超时");
-        // 先读到请求头结束(CRLF CRLF), 再按 Content-Length 读 body
-        let mut raw = Vec::new();
-        let mut buf = [0u8; 4096];
-        let header_end = loop {
-            if let Some(pos) = raw.windows(4).position(|w| w == b"\r\n\r\n") {
-                break pos + 4;
-            }
-            let n = stream.read(&mut buf).expect("读请求头");
-            assert!(n > 0, "客户端在请求头读完前断开");
-            raw.extend_from_slice(&buf[..n]);
-        };
-        let head = String::from_utf8_lossy(&raw[..header_end]).to_string();
-        let mut lines = head.split("\r\n");
-        let request_line = lines.next().unwrap_or_default().to_string();
-        let headers: Vec<(String, String)> = lines
-            .filter(|l| !l.is_empty())
-            .filter_map(|l| l.split_once(':'))
-            .map(|(k, v)| (k.trim().to_ascii_lowercase(), v.trim().to_string()))
-            .collect();
-        let content_length: usize = headers
-            .iter()
-            .find(|(k, _)| k == "content-length")
-            .and_then(|(_, v)| v.parse().ok())
-            .unwrap_or(0);
-        let mut body = raw[header_end..].to_vec();
-        while body.len() < content_length {
-            let n = stream.read(&mut buf).expect("读 body");
-            assert!(n > 0, "body 没读完客户端就断开了");
-            body.extend_from_slice(&buf[..n]);
-        }
-        body.truncate(content_length);
-        let response = format!(
-            "HTTP/1.1 {status} X\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{response_body}",
-            response_body.len()
-        );
-        stream.write_all(response.as_bytes()).expect("回包");
-        stream.flush().ok();
-        CapturedRequest {
-            request_line,
-            headers,
-            body,
-        }
+        let cap = read_request(&mut stream);
+        write_response(&mut stream, status, response_body);
+        cap
     });
     (format!("http://{addr}"), handle)
+}
+
+/// 计数版假 HTTP: 一直收请求(每个都回同一 status/body), 由 [`CountingHttp::finish`] 收工.
+///
+/// 「同 key 两次调用只 1 次上游」这类断言需要**数请求**, 而不是只收一个 ——
+/// 多出来的那一个正是要抓的回归(旧行为: 两次调用两次上游)。
+pub(super) struct CountingHttp {
+    base: String,
+    hits: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    handle: Option<std::thread::JoinHandle<()>>,
+}
+
+impl CountingHttp {
+    pub(super) fn start(status: u16, response_body: &'static str) -> Self {
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+        use std::sync::Arc;
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("绑定本地端口");
+        let addr = listener.local_addr().expect("取本地端口");
+        listener.set_nonblocking(true).expect("设非阻塞");
+        let hits = Arc::new(AtomicUsize::new(0));
+        let stop = Arc::new(AtomicBool::new(false));
+        let (hits_t, stop_t) = (Arc::clone(&hits), Arc::clone(&stop));
+        let handle = std::thread::spawn(move || {
+            while !stop_t.load(Ordering::Acquire) {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        let _cap = read_request(&mut stream);
+                        hits_t.fetch_add(1, Ordering::AcqRel);
+                        write_response(&mut stream, status, response_body);
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(std::time::Duration::from_millis(2));
+                    }
+                    Err(_) => return,
+                }
+            }
+        });
+        Self {
+            base: format!("http://{addr}"),
+            hits,
+            stop,
+            handle: Some(handle),
+        }
+    }
+
+    pub(super) fn base(&self) -> String {
+        self.base.clone()
+    }
+
+    pub(super) fn hits(&self) -> usize {
+        self.hits.load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    /// 清零计数(逐条对账用): 只改计数, 不动服务线程.
+    pub(super) fn reset_hits(&self) {
+        self.hits.store(0, std::sync::atomic::Ordering::Release);
+    }
+
+    /// 收工: 停服务线程并返回它一共收到多少个请求.
+    pub(super) fn finish(mut self) -> usize {
+        self.stop.store(true, std::sync::atomic::Ordering::Release);
+        if let Some(h) = self.handle.take() {
+            let _ = h.join();
+        }
+        self.hits()
+    }
 }
 
 /// 单请求路径的**完整形状**: URL 参数(offset=0&complete=true&version=1.0)、三个头、原始 body.

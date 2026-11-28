@@ -1,6 +1,7 @@
 //! 歌曲域: 单曲/推荐/流地址/榜单/风格/听歌排行/最近播放, 以及它们的响应解析.
 
 use super::*;
+use crate::read_cache::endpoint;
 
 /// 最近播放的三种资源(专辑/歌单/电台)
 #[derive(Debug, Clone, Copy)]
@@ -184,10 +185,15 @@ impl NeteaseProvider {
     pub(super) fn charts(&self) -> BoxFuture<'_, ProviderResult<Vec<ChartSummary>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua);
-            let resp = client.toplist_detail(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_charts(&resp.body))
+            let body = self
+                .cached_body(endpoint::CHARTS, &[], || async {
+                    let q = make_query(&cookie, &domain, &ua);
+                    let resp = client.toplist_detail(&q).await.map_err(map_error)?;
+                    check_body(&resp.body)?;
+                    Ok(resp.body)
+                })
+                .await?;
+            Ok(parse_charts(&body))
         })
     }
 
@@ -199,10 +205,15 @@ impl NeteaseProvider {
     ) -> BoxFuture<'_, ProviderResult<Vec<ToplistCatalogGroup>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua);
-            let resp = client.toplist_detail_v2(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_toplist_catalog(&resp.body))
+            let body = self
+                .cached_body(endpoint::TOPLIST_CATALOG, &[], || async {
+                    let q = make_query(&cookie, &domain, &ua);
+                    let resp = client.toplist_detail_v2(&q).await.map_err(map_error)?;
+                    check_body(&resp.body)?;
+                    Ok(resp.body)
+                })
+                .await?;
+            Ok(parse_toplist_catalog(&body))
         })
     }
 
@@ -210,10 +221,20 @@ impl NeteaseProvider {
     pub(super) fn new_songs(&self, limit: u32) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua).param("limit", &limit.to_string());
-            let resp = client.personalized_newsong(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_new_songs(&resp.body))
+            let body = self
+                .cached_body(
+                    endpoint::NEW_SONGS,
+                    &[("limit", limit.to_string())],
+                    || async {
+                        let q =
+                            make_query(&cookie, &domain, &ua).param("limit", &limit.to_string());
+                        let resp = client.personalized_newsong(&q).await.map_err(map_error)?;
+                        check_body(&resp.body)?;
+                        Ok(resp.body)
+                    },
+                )
+                .await?;
+            Ok(parse_new_songs(&body))
         })
     }
 

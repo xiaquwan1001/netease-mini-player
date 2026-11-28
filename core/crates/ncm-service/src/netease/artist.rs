@@ -1,6 +1,7 @@
 //! 歌手域: 歌手详情/歌曲分页/MV/相似/热门/订阅.
 
 use super::*;
+use crate::read_cache::endpoint;
 
 impl NeteaseProvider {
     /// 相似歌手: {code, artists:[{id,name,picUrl}]}(需要登录)
@@ -16,10 +17,21 @@ impl NeteaseProvider {
             if !cookie.contains("MUSIC_U=") {
                 return Err(ProviderError::auth("相似歌手需要登录"));
             }
-            let q = make_query(&cookie, &domain, &ua).param("id", &artist_id.to_string());
-            let resp = client.simi_artist(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_similar_artists(&resp.body))
+            // 公开数据(艺人列表), 与账号无关; 会话变更会整体清空缓存.
+            let body = self
+                .cached_body(
+                    endpoint::SIMILAR_ARTISTS,
+                    &[("id", artist_id.to_string())],
+                    || async {
+                        let q =
+                            make_query(&cookie, &domain, &ua).param("id", &artist_id.to_string());
+                        let resp = client.simi_artist(&q).await.map_err(map_error)?;
+                        check_body(&resp.body)?;
+                        Ok(resp.body)
+                    },
+                )
+                .await?;
+            Ok(parse_similar_artists(&body))
         })
     }
 
@@ -35,13 +47,26 @@ impl NeteaseProvider {
                 return Err(ProviderError::not_found("artist id 为空"));
             }
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua)
-                .param("id", &artist_id.to_string())
-                .param("offset", &offset.to_string())
-                .param("limit", &limit.to_string());
-            let resp = client.artist_songs(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_artist_songs(&resp.body))
+            let body = self
+                .cached_body(
+                    endpoint::ARTIST_SONGS,
+                    &[
+                        ("id", artist_id.to_string()),
+                        ("offset", offset.to_string()),
+                        ("limit", limit.to_string()),
+                    ],
+                    || async {
+                        let q = make_query(&cookie, &domain, &ua)
+                            .param("id", &artist_id.to_string())
+                            .param("offset", &offset.to_string())
+                            .param("limit", &limit.to_string());
+                        let resp = client.artist_songs(&q).await.map_err(map_error)?;
+                        check_body(&resp.body)?;
+                        Ok(resp.body)
+                    },
+                )
+                .await?;
+            Ok(parse_artist_songs(&body))
         })
     }
 
@@ -58,13 +83,26 @@ impl NeteaseProvider {
                 return Err(ProviderError::not_found("artist id 为空"));
             }
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua)
-                .param("id", &artist_id.to_string())
-                .param("offset", &offset.to_string())
-                .param("limit", &limit.to_string());
-            let resp = client.artist_album(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_artist_albums(&resp.body))
+            let body = self
+                .cached_body(
+                    endpoint::ARTIST_ALBUMS,
+                    &[
+                        ("id", artist_id.to_string()),
+                        ("offset", offset.to_string()),
+                        ("limit", limit.to_string()),
+                    ],
+                    || async {
+                        let q = make_query(&cookie, &domain, &ua)
+                            .param("id", &artist_id.to_string())
+                            .param("offset", &offset.to_string())
+                            .param("limit", &limit.to_string());
+                        let resp = client.artist_album(&q).await.map_err(map_error)?;
+                        check_body(&resp.body)?;
+                        Ok(resp.body)
+                    },
+                )
+                .await?;
+            Ok(parse_artist_albums(&body))
         })
     }
 
@@ -103,13 +141,26 @@ impl NeteaseProvider {
                 return Err(ProviderError::not_found("artist id 为空"));
             }
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua)
-                .param("id", &artist_id.to_string())
-                .param("offset", &offset.to_string())
-                .param("limit", &limit.to_string());
-            let resp = client.artist_mv(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_artist_mvs(&resp.body))
+            let body = self
+                .cached_body(
+                    endpoint::ARTIST_MVS,
+                    &[
+                        ("id", artist_id.to_string()),
+                        ("offset", offset.to_string()),
+                        ("limit", limit.to_string()),
+                    ],
+                    || async {
+                        let q = make_query(&cookie, &domain, &ua)
+                            .param("id", &artist_id.to_string())
+                            .param("offset", &offset.to_string())
+                            .param("limit", &limit.to_string());
+                        let resp = client.artist_mv(&q).await.map_err(map_error)?;
+                        check_body(&resp.body)?;
+                        Ok(resp.body)
+                    },
+                )
+                .await?;
+            Ok(parse_artist_mvs(&body))
         })
     }
 
@@ -120,10 +171,19 @@ impl NeteaseProvider {
                 return Err(ProviderError::not_found("mv id 为空"));
             }
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua).param("mvid", &mv_id.to_string());
-            let resp = client.mv_detail(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            let detail = parse_mv_detail(&resp.body);
+            let body = self
+                .cached_body(
+                    endpoint::MV_DETAIL,
+                    &[("mvid", mv_id.to_string())],
+                    || async {
+                        let q = make_query(&cookie, &domain, &ua).param("mvid", &mv_id.to_string());
+                        let resp = client.mv_detail(&q).await.map_err(map_error)?;
+                        check_body(&resp.body)?;
+                        Ok(resp.body)
+                    },
+                )
+                .await?;
+            let detail = parse_mv_detail(&body);
             if detail.id == 0 || detail.name.is_empty() {
                 return Err(ProviderError::not_found("MV 不存在"));
             }
@@ -166,12 +226,21 @@ impl NeteaseProvider {
     ) -> BoxFuture<'_, ProviderResult<Vec<HotArtist>>> {
         Box::pin(async move {
             let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua)
-                .param("limit", &limit.to_string())
-                .param("offset", &offset.to_string());
-            let resp = client.top_artists(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_hot_artists(&resp.body))
+            let body = self
+                .cached_body(
+                    endpoint::HOT_ARTISTS,
+                    &[("limit", limit.to_string()), ("offset", offset.to_string())],
+                    || async {
+                        let q = make_query(&cookie, &domain, &ua)
+                            .param("limit", &limit.to_string())
+                            .param("offset", &offset.to_string());
+                        let resp = client.top_artists(&q).await.map_err(map_error)?;
+                        check_body(&resp.body)?;
+                        Ok(resp.body)
+                    },
+                )
+                .await?;
+            Ok(parse_hot_artists(&body))
         })
     }
 
@@ -186,9 +255,23 @@ impl NeteaseProvider {
             }
             let (client, domain, ua, cookie) = self.snapshot();
             let base = || make_query(&cookie, &domain, &ua).param("id", &artist_id.to_string());
+            // 头部资料与热门歌曲是纯公开数据 ⇒ 走只读缓存(进页 3–4 请求里省掉这两个);
+            // 专辑/粉丝数仍按需现取(前者可失败、后者是账号侧计数, 都不进缓存).
+            let detail_params = [("id", artist_id.to_string())];
+            let detail_body = self.cached_body(endpoint::ARTIST_DETAIL, &detail_params, || async {
+                let resp = client.artist_detail(&base()).await.map_err(map_error)?;
+                check_body(&resp.body)?;
+                Ok(resp.body)
+            });
+            let top_params = [("id", artist_id.to_string())];
+            let top_body = self.cached_body(endpoint::ARTIST_TOP_SONG, &top_params, || async {
+                let resp = client.artist_top_song(&base()).await.map_err(map_error)?;
+                check_body(&resp.body)?;
+                Ok(resp.body)
+            });
             let (detail, top, albums, follow_count) = futures::future::join4(
-                async { client.artist_detail(&base()).await.map_err(map_error) },
-                async { client.artist_top_song(&base()).await.map_err(map_error) },
+                detail_body,
+                top_body,
                 async {
                     client
                         .artist_album(&base().param("limit", "20"))
@@ -199,9 +282,7 @@ impl NeteaseProvider {
             )
             .await;
             let detail = detail?;
-            check_body(&detail.body)?;
             let top = top?;
-            check_body(&top.body)?;
             // 专辑走 weapi, 匿名/风控下可能失败: 不是致命错误
             let albums_body = match albums {
                 Ok(resp) if check_body(&resp.body).is_ok() => resp.body,
@@ -213,8 +294,8 @@ impl NeteaseProvider {
                 _ => Value::Null,
             };
             Ok(parse_artist_detail_with_follow(
-                &detail.body,
-                &top.body,
+                &detail,
+                &top,
                 &albums_body,
                 &follow_body,
             ))
