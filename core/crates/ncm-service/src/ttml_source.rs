@@ -1283,7 +1283,8 @@ mod tests {
             none_marker_fresh(&std::fs::metadata(&p).unwrap()),
             "刚写的标记必须有效(不再打 API)"
         );
-        let old = std::time::SystemTime::now() - NONE_MARKER_TTL - std::time::Duration::from_secs(3600);
+        let old =
+            std::time::SystemTime::now() - NONE_MARKER_TTL - std::time::Duration::from_secs(3600);
         let f = std::fs::OpenOptions::new().write(true).open(&p).unwrap();
         f.set_times(std::fs::FileTimes::new().set_modified(old))
             .unwrap();
