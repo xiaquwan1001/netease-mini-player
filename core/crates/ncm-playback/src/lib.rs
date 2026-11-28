@@ -633,6 +633,263 @@ mod backend {
         }
     }
 
+    // ---- ThreadedSource: 解码/磁盘 IO 离开音频回调线程(ADR: .pi/plans/adr-playback-threaded-source.md) ----
+
+    /// 一块解码好的样本 = 1024 **帧**(乘声道数), 保证帧对齐不劈开重采样边界.
+    const DECODE_BLOCK_FRAMES: usize = 1024;
+    /// 块通道深度: 4 块 ≈ 最坏 93ms 预读(44.1kHz 立体声).
+    const DECODE_CHANNEL_BLOCKS: usize = 4;
+    /// seek 回执的等待上限. 只在**完整文件**上用(解码线程读盘不会长阻塞),
+    /// 渐进源根本走不到这条路径(见 [`ThreadedSource::try_seek`]).
+    const SEEK_ACK_TIMEOUT: Duration = Duration::from_secs(2);
+
+    /// 解码线程 → 消费侧的两类消息(走**同一条**通道, 顺序因此天然成立).
+    enum DecodeMsg {
+        Block(Vec<Sample>),
+        SeekDone(Result<(), SeekError>),
+    }
+
+    /// 消费侧 → 解码线程的控制消息(目前只有 seek).
+    struct DecodeCtrl {
+        pos: Duration,
+    }
+
+    /// 把 `Source` 的解码搬进专用线程, 消费侧只做 `pop`.
+    ///
+    /// # 为什么需要它
+    ///
+    /// rodio 的 `MixerSource::next` 在 **cpal 音频回调线程**上就地拉每个源的 `next()`
+    /// (`rodio-0.23.0/src/mixer.rs:111-130`), 于是 `Decoder` 的 symphonia 解码、`File::read`
+    /// 以及 `GrowingFile` 等下载的 10ms 自旋**全都在回调线程里**. 后果有两层:
+    /// ①这一段是真的 underrun(回调返回不及 → 声卡讨不到数据 → 噼嗒/掉帧);
+    /// ②`Player::clear()`(`sleep_until_end`)要等同一个回调把队列吐完, 弱网切歌/暂停
+    /// 会被拖到 `stall_limit`(90s)量级 —— 也就是审计里的「点暂停像卡住」.
+    ///
+    /// 现在解码线程持 `Decoder`, 用 `sync_channel(4)` 推 1024 帧一块; 消费侧 `next()`
+    /// **永不阻塞**: 通道空 ⇒ 吐静音(`0.0`, 混音里中性), 通道断 ⇒ `None`(真 EOF).
+    /// 「暂时没数据」与「播完了」正是靠这个区分, 语义与 `GrowingFile` 的 `done` 一致.
+    ///
+    /// EQ/淡入**留在消费侧**(`EqSource`/`FadeIn` 包在外层): 纯算术、无 IO, 曲线与换源
+    /// 淡入的语义因此与改动前完全一致.
+    struct ThreadedSource {
+        rx: mpsc::Receiver<DecodeMsg>,
+        /// `None` = 解码线程已退出(spawn 失败/自己结束)
+        ctrl: Option<mpsc::Sender<DecodeCtrl>>,
+        /// 当前块与读到第几个样本
+        block: Vec<Sample>,
+        pos: usize,
+        /// 构造时快照(rodio 的 `UniformSourceIterator::new` 只在追加时读一次)
+        channels: ChannelCount,
+        sample_rate: SampleRate,
+        total_duration: Option<Duration>,
+        /// 内层解码器是否支持 seek(渐进源 = false, 见 [`ThreadedSource::try_seek`])
+        seekable: bool,
+        /// 渐进源的「探测完就阻塞等下载」开关: drop 时置 false, 让阻塞中的
+        /// `GrowingFile::read` 立刻按 EOF 返回, 解码线程随之退出(否则弱网切歌会留下
+        /// 一条最长 `stall_limit` 的僵尸线程).
+        cancel: Option<Arc<std::sync::atomic::AtomicBool>>,
+    }
+
+    impl ThreadedSource {
+        /// 完整文件(可 seek)
+        fn seekable<I>(inner: I) -> Self
+        where
+            I: Source<Item = Sample> + Send + 'static,
+        {
+            Self::spawn(inner, true, None)
+        }
+
+        /// 渐进源(不可 seek): 带上 `wait_for_more` 开关, 用于 drop 时取消阻塞等待
+        fn growing<I>(inner: I, wait_flag: Arc<std::sync::atomic::AtomicBool>) -> Self
+        where
+            I: Source<Item = Sample> + Send + 'static,
+        {
+            Self::spawn(inner, false, Some(wait_flag))
+        }
+
+        fn spawn<I>(
+            inner: I,
+            seekable: bool,
+            cancel: Option<Arc<std::sync::atomic::AtomicBool>>,
+        ) -> Self
+        where
+            I: Source<Item = Sample> + Send + 'static,
+        {
+            let channels = inner.channels();
+            let sample_rate = inner.sample_rate();
+            let total_duration = inner.total_duration();
+            let ch = channels.get().max(1) as usize;
+            let (tx, rx) = mpsc::sync_channel(DECODE_CHANNEL_BLOCKS);
+            let (ctrl_tx, ctrl_rx) = mpsc::channel();
+            if let Err(e) = std::thread::Builder::new()
+                .name("ncm-decode".into())
+                .spawn(move || decode_loop(inner, tx, ctrl_rx, DECODE_BLOCK_FRAMES, ch))
+            {
+                // spawn 失败(极端的线程数耗尽): `tx` 已被丢弃 ⇒ 消费侧立刻 EOF,
+                // 与"这首放不了"同一表现, 不会挂住回调线程.
+                log::warn!("[playback] 解码线程起不来, 本曲将无声: {e}");
+            }
+            Self {
+                rx,
+                ctrl: Some(ctrl_tx),
+                block: Vec::new(),
+                pos: 0,
+                channels,
+                sample_rate,
+                total_duration,
+                seekable,
+                cancel,
+            }
+        }
+    }
+
+    impl Drop for ThreadedSource {
+        fn drop(&mut self) {
+            // 1) 渐进源: 让阻塞中的 `read` 立刻返回 EOF(见字段注释)
+            if let Some(flag) = &self.cancel {
+                flag.store(false, std::sync::atomic::Ordering::Release);
+            }
+            // 2) 丢控制端 ⇒ 解码线程下一次 `try_recv` 见 Disconnected 就退出;
+            //    同时 `rx` 随结构体一起 drop, 阻塞在 `send` 的线程也会立刻失败返回.
+            self.ctrl = None;
+        }
+    }
+
+    /// 解码线程主循环: 先看控制消息(seek), 再攒一块推给消费侧.
+    fn decode_loop<I>(
+        mut inner: I,
+        tx: mpsc::SyncSender<DecodeMsg>,
+        ctrl_rx: mpsc::Receiver<DecodeCtrl>,
+        frames: usize,
+        channels: usize,
+    ) where
+        I: Source<Item = Sample> + Send + 'static,
+    {
+        let block_len = frames * channels.max(1);
+        let mut buf: Vec<Sample> = Vec::with_capacity(block_len);
+        loop {
+            // 1) seek 优先(消费侧在 `try_seek` 里会边排空旧块边等回执, 所以这里发不出去
+            //    只可能是消费侧已经走了)
+            match ctrl_rx.try_recv() {
+                Ok(DecodeCtrl { pos }) => {
+                    let r = inner.try_seek(pos);
+                    let failed = r.is_err();
+                    if tx.send(DecodeMsg::SeekDone(r)).is_err() {
+                        return;
+                    }
+                    if !failed {
+                        // 旧块作废: buf 里是 seek 之前攒的样本
+                        buf.clear();
+                    }
+                    continue;
+                }
+                Err(mpsc::TryRecvError::Disconnected) => return,
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+            // 2) 攒一块(短块 = 内层真的到底了)
+            buf.clear();
+            while buf.len() < block_len {
+                match inner.next() {
+                    Some(s) => buf.push(s),
+                    None => break,
+                }
+            }
+            let eof = buf.len() < block_len;
+            if !buf.is_empty() && tx.send(DecodeMsg::Block(std::mem::take(&mut buf))).is_err() {
+                return;
+            }
+            if eof {
+                // 通道随 `tx` 一起 drop ⇒ 消费侧读到 Disconnected ⇒ `None`(真 EOF)
+                return;
+            }
+        }
+    }
+
+    impl Iterator for ThreadedSource {
+        type Item = Sample;
+
+        /// **永不阻塞**(这是整个改动的判据): 无数据 ⇒ 静音, 通道断 ⇒ EOF.
+        fn next(&mut self) -> Option<Self::Item> {
+            loop {
+                if self.pos < self.block.len() {
+                    let s = self.block[self.pos];
+                    self.pos += 1;
+                    return Some(s);
+                }
+                self.block.clear();
+                self.pos = 0;
+                match self.rx.try_recv() {
+                    Ok(DecodeMsg::Block(b)) => {
+                        self.block = b;
+                        continue;
+                    }
+                    // seek 回执正常只出现在 `try_seek` 里; 漏到这里就丢掉(不该发生)
+                    Ok(DecodeMsg::SeekDone(_)) => continue,
+                    // 解码线程还在跑(比如正阻塞在等下载) ⇒ 这一段用静音顶上
+                    Err(mpsc::TryRecvError::Empty) => return Some(0.0),
+                    Err(mpsc::TryRecvError::Disconnected) => return None,
+                }
+            }
+        }
+    }
+
+    impl Source for ThreadedSource {
+        /// 与 `MixerSource` 一致: 不声明 span(块边界与 span 无关)
+        fn current_span_len(&self) -> Option<usize> {
+            None
+        }
+
+        fn channels(&self) -> ChannelCount {
+            self.channels
+        }
+
+        fn sample_rate(&self) -> SampleRate {
+            self.sample_rate
+        }
+
+        fn total_duration(&self) -> Option<Duration> {
+            self.total_duration
+        }
+
+        /// seek **转发给解码线程**(完整文件唯一的 seek 路径: `apply_rebuild` 的
+        /// `SourceStatus::Seekable` 分支走 `player.try_seek` → 这里).
+        ///
+        /// 两条刻意的选择:
+        /// - 渐进源直接 `NotSupported`: 解码线程此刻可能正阻塞在 `GrowingFile::read` 等下载
+        ///   (最长 `stall_limit`), 把回调线程派去等网络是不可接受的. 渐进期 seek 的语义
+        ///   不变 —— 仍由 `apply_rebuild` + `upgrade_to_complete` 重建解码器(P-10 方案 B).
+        /// - 等待回执时**边排空块通道边等**: 通道容量只有 4 块, 不排空的话解码线程会卡在
+        ///   `send` 上永远看不到控制消息(死锁).
+        fn try_seek(&mut self, pos: Duration) -> Result<(), SeekError> {
+            let not_supported = SeekError::NotSupported {
+                underlying_source: std::any::type_name::<Self>(),
+            };
+            if !self.seekable {
+                return Err(not_supported);
+            }
+            let Some(ctrl) = self.ctrl.as_ref() else {
+                return Err(not_supported);
+            };
+            if ctrl.send(DecodeCtrl { pos }).is_err() {
+                return Err(not_supported);
+            }
+            loop {
+                match self.rx.recv_timeout(SEEK_ACK_TIMEOUT) {
+                    // seek 之前攒下的块: 位置已经过了/要跳走, 直接丢
+                    Ok(DecodeMsg::Block(_)) => {}
+                    Ok(DecodeMsg::SeekDone(r)) => {
+                        if r.is_ok() {
+                            self.block.clear();
+                            self.pos = 0;
+                        }
+                        return r;
+                    }
+                    Err(_) => return Err(not_supported),
+                }
+            }
+        }
+    }
+
     /// 增长中的本地文件: 下载线程还在追加字节时, 读到 EOF **阻塞等待**而不是返回 0.
     ///
     /// 这是"边下边播"的关键: rodio/symphonia 只认 `Read + Seek`, 看到 EOF 就会
@@ -780,10 +1037,13 @@ mod backend {
     ///    否则播到已下载末尾就当整首播完(边下边播的核心性质, 见 `blocks_at_eof_until_more_bytes_arrive`)。
     ///
     /// 返回 `Err` 表示**数据还不够建解码器**(慢网起播的正常状态), 由调用方登记重试。
-    fn build_growing(
+    ///
+    /// 返回的同时把 `wait_for_more` 开关交给调用方: 解码器装进 [`ThreadedSource`] 后,
+    /// 只有这个开关能取消解码线程里阻塞中的等待(见 [`ThreadedSource`] 的 drop)。
+    fn probe_growing(
         file: File,
         done: Arc<std::sync::atomic::AtomicBool>,
-    ) -> Result<Decoder<GrowingFile>, String> {
+    ) -> Result<(Decoder<GrowingFile>, Arc<std::sync::atomic::AtomicBool>), String> {
         let source = GrowingFile::from_file(file, done, false);
         let wait = source.wait_flag();
         match Decoder::builder()
@@ -793,10 +1053,28 @@ mod backend {
         {
             Ok(decoder) => {
                 wait.store(true, std::sync::atomic::Ordering::Release);
-                Ok(decoder)
+                Ok((decoder, wait))
             }
             Err(e) => Err(e.to_string()),
         }
+    }
+
+    /// 生产路径: 探测 + 装进解码线程([`ThreadedSource`])。
+    fn build_growing_threaded(
+        file: File,
+        done: Arc<std::sync::atomic::AtomicBool>,
+    ) -> Result<ThreadedSource, String> {
+        let (decoder, wait) = probe_growing(file, done)?;
+        Ok(ThreadedSource::growing(decoder, wait))
+    }
+
+    /// 只要裸解码器的版本(单测用): 断言 `GrowingFile` 的阻塞/EOF 语义本身没变。
+    #[cfg(test)]
+    fn build_growing(
+        file: File,
+        done: Arc<std::sync::atomic::AtomicBool>,
+    ) -> Result<Decoder<GrowingFile>, String> {
+        probe_growing(file, done).map(|(decoder, _wait)| decoder)
     }
 
     /// 把一条源套上 EQ 链与淡入(**纯构造**: 不碰播放器/输出设备, 因此没有声卡也能单测包络).
@@ -941,7 +1219,7 @@ mod backend {
         if let Err(e) = file.seek(std::io::SeekFrom::Start(0)) {
             return PendingOutcome::NotReady(format!("seek {path} failed: {e}"));
         }
-        match build_growing(file, Arc::clone(done)) {
+        match build_growing_threaded(file, Arc::clone(done)) {
             Ok(decoder) => {
                 start_source(
                     player,
@@ -1051,7 +1329,8 @@ mod backend {
         let duration = decoder
             .total_duration()
             .or_else(|| track.expected_duration_ms.map(Duration::from_millis));
-        let mut source = decoder;
+        // 解码/读盘交给线程; 位置先在命令线程上跳好(在工作线程里做, 回调线程不用等)
+        let mut source = ThreadedSource::seekable(decoder);
         source.try_seek(target).map_err(|e| {
             PlaybackError::Unsupported(format!("完整文件无法 seek 到 {target_ms}ms: {e}"))
         })?;
@@ -1200,7 +1479,8 @@ mod backend {
                             Ok(file) => match Decoder::try_from(file) {
                                 Ok(decoder) => start_source(
                                     &player,
-                                    decoder,
+                                    // 解码/读盘不在音频回调线程上做(ADR playback-threaded-source)
+                                    ThreadedSource::seekable(decoder),
                                     &local,
                                     track_id,
                                     expected_duration_ms,
@@ -2069,6 +2349,204 @@ mod backend {
 
             stop.store(true, std::sync::atomic::Ordering::Release);
             drainer.join().unwrap();
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+
+        // ---- ThreadedSource: 解码/磁盘 IO 不在音频回调线程上做 ----
+
+        /// 计数 + 记账线程的 `Read` 包装: 每次 `read` 都记下**是哪个线程**在读.
+        struct CountingRead<R> {
+            inner: R,
+            reads: Arc<std::sync::atomic::AtomicUsize>,
+            threads: Arc<Mutex<Vec<std::thread::ThreadId>>>,
+        }
+
+        impl<R: std::io::Read> std::io::Read for CountingRead<R> {
+            fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                self.reads
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                self.threads
+                    .lock()
+                    .unwrap()
+                    .push(std::thread::current().id());
+                self.inner.read(buf)
+            }
+        }
+
+        impl<R: std::io::Seek> std::io::Seek for CountingRead<R> {
+            fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+                self.inner.seek(pos)
+            }
+        }
+
+        /// R2 的核心判据: 消费侧 `next()` **一次 `Read` 都不做** —— 读盘/解码全在解码线程上。
+        ///
+        /// 断言方式刻意选"记账读线程"而不是"计数不变": 计数会与解码线程的预读赛跑,
+        /// 而线程身份是确定性的 —— 只要有任何一次 `read` 落到调用线程, 这条就红。
+        #[test]
+        fn threaded_source_never_reads_on_the_caller_thread() {
+            // 够大: 消费 100k 样本必然越过 symphonia 建解码器时预读的那一小段缓冲,
+            // 于是"之后还有没有读盘"才测得出来
+            let total = 800_000usize; // 8kHz mono = 100s
+            let mut bytes = wav_header(total);
+            for i in 0..total {
+                let v: i16 = if i % 2 == 0 { 1_000 } else { -1_000 };
+                bytes.extend_from_slice(&v.to_le_bytes());
+            }
+            let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let threads = Arc::new(Mutex::new(Vec::<std::thread::ThreadId>::new()));
+            let counting = CountingRead {
+                inner: std::io::Cursor::new(bytes),
+                reads: Arc::clone(&reads),
+                threads: Arc::clone(&threads),
+            };
+            let decoder = Decoder::builder()
+                .with_data(counting)
+                .build()
+                .expect("内存 wav 应该能解");
+            // 建解码器的探测(symphonia 扫 marker)本来就在调用线程上做 —— 那是
+            // `probe_growing` 的既定语义; 到这里之后的读取必须全部发生在解码线程。
+            threads.lock().unwrap().clear();
+            reads.store(0, std::sync::atomic::Ordering::Relaxed);
+            let mut src = ThreadedSource::seekable(decoder);
+
+            let caller = std::thread::current().id();
+            let mut got = 0usize;
+            while got < 100_000 {
+                match src.next() {
+                    Some(_) => got += 1,
+                    None => panic!("解码线程不该在 100k 个样本前结束"),
+                }
+            }
+            assert_eq!(got, 100_000);
+            assert!(
+                reads.load(std::sync::atomic::Ordering::Relaxed) > 0,
+                "解码线程必须真的读过盘(否则这条测不到东西)"
+            );
+            let seen = threads.lock().unwrap();
+            assert!(
+                seen.iter().all(|id| *id != caller),
+                "消费侧线程上出现了 {} 次 Read —— 解码又回到音频回调线程了",
+                seen.iter().filter(|id| **id == caller).count()
+            );
+        }
+
+        /// 源暂时没数据时 `next()` **不得阻塞**: 吐静音(0.0),
+        /// 这样 `Player::clear()` 的 `sleep_until_end` 不会被卡住(弱网切歌/暂停的关键)。
+        #[test]
+        fn threaded_source_returns_silence_instead_of_blocking_when_starved() {
+            /// 永远攒不满一块的源: `next()` 阻塞在闸门上, 由测试最后放行(结束线程)。
+            struct GatedSource {
+                gate: mpsc::Receiver<()>,
+            }
+            impl Iterator for GatedSource {
+                type Item = Sample;
+                fn next(&mut self) -> Option<Sample> {
+                    let _ = self.gate.recv();
+                    None
+                }
+            }
+            impl Source for GatedSource {
+                fn current_span_len(&self) -> Option<usize> {
+                    None
+                }
+                fn channels(&self) -> ChannelCount {
+                    std::num::NonZero::new(2).unwrap()
+                }
+                fn sample_rate(&self) -> SampleRate {
+                    std::num::NonZero::new(44_100).unwrap()
+                }
+                fn total_duration(&self) -> Option<Duration> {
+                    None
+                }
+            }
+
+            let (gate_tx, gate_rx) = mpsc::channel();
+            let mut src = ThreadedSource::seekable(GatedSource { gate: gate_rx });
+            let started = Instant::now();
+            for i in 0..16 {
+                assert_eq!(
+                    src.next(),
+                    Some(0.0),
+                    "第 {i} 个样本: 没数据时必须吐静音而不是阻塞"
+                );
+            }
+            let elapsed = started.elapsed();
+            assert!(
+                elapsed < Duration::from_millis(100),
+                "16 个样本不应等数据, 实测 {elapsed:?}"
+            );
+            drop(src);
+            drop(gate_tx); // 放行解码线程, 让它自己退出
+        }
+
+        /// 完整文件的 seek 必须真的转发给解码线程, 且 seek 之前攒下的旧块要丢掉
+        /// (否则拖进度条会先播回跳转前的位置)。
+        #[test]
+        fn threaded_source_seek_forwards_and_discards_stale_blocks() {
+            // 前 0.4s 静音, 后 0.6s 满幅(16bit/mono/8kHz)
+            let (dir, path) = half_loud_wav("threaded-seek", 8_000, 3_200);
+            let decoder = Decoder::try_from(File::open(&path).unwrap()).expect("wav 应该能解");
+            let mut src = ThreadedSource::seekable(decoder);
+
+            // 先消费一点(此时全是静音), 让通道里攒下"跳转前"的块
+            for _ in 0..64 {
+                assert_eq!(src.next(), Some(0.0), "前 0.4s 应该都是静音");
+            }
+            src.try_seek(Duration::from_millis(600))
+                .expect("完整文件必须可以 seek(FadeIn/EqSource 都透传这一层)");
+
+            // seek 之后应当**很快**看到满幅样本: 允许通道瞬时排空带来的少量静音,
+            // 但绝不允许回到开头那 3200 个静音样本(那说明旧块没丢)
+            let mut silent_prefix = 0usize;
+            let deadline = Instant::now() + Duration::from_secs(2);
+            let mut found = false;
+            while Instant::now() < deadline {
+                match src.next() {
+                    Some(v) if v.abs() > 0.1 => {
+                        found = true;
+                        break;
+                    }
+                    Some(_) => silent_prefix += 1,
+                    None => break,
+                }
+                if silent_prefix.is_multiple_of(64) {
+                    // 解码线程还要现读一小段, 让出时间片(消费侧本身是永不阻塞的)
+                    std::thread::sleep(Duration::from_millis(2));
+                }
+            }
+            assert!(found, "seek 到 0.6s 后应该立刻听到满幅样本(没等到)");
+            assert!(
+                silent_prefix < 2_500,
+                "seek 后先走了 {silent_prefix} 个静音样本 —— 回到了开头那段, 旧块没丢"
+            );
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+
+        /// 渐进源的 `try_seek` 必须**立刻**报不支持: 解码线程可能正阻塞在等下载,
+        /// 转过去就是拿音频回调线程去等网络(渐进期 seek 走 `apply_rebuild` 重建)。
+        #[test]
+        fn threaded_growing_source_rejects_seek_without_blocking() {
+            let (dir, path) = temp_wav("threaded-growing-seek");
+            let mut bytes = wav_header(400);
+            bytes.extend_from_slice(&vec![0u8; 400 * 2]);
+            std::fs::write(&path, bytes).unwrap();
+            let done = Arc::new(std::sync::atomic::AtomicBool::new(true));
+            let mut src = build_growing_threaded(File::open(&path).unwrap(), Arc::clone(&done))
+                .expect("数据齐了就该能建解码器");
+
+            let started = Instant::now();
+            let err = src.try_seek(Duration::from_millis(50)).unwrap_err();
+            assert!(
+                matches!(err, SeekError::NotSupported { .. }),
+                "渐进源应报 NotSupported, 实测 {err:?}"
+            );
+            assert!(
+                started.elapsed() < Duration::from_millis(100),
+                "渐进源 seek 不能去等解码线程(它在等下载), 实测 {:?}",
+                started.elapsed()
+            );
+            drop(src);
             let _ = std::fs::remove_dir_all(&dir);
         }
     }
