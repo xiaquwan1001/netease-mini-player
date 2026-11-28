@@ -38,6 +38,18 @@ class MainActivity : FlutterActivity() {
     private var pendingPick: MethodChannel.Result? = null
 
     /**
+     * 保存图片到图库: Android 10 以下要先拿 WRITE_EXTERNAL_STORAGE(运行时权限),
+     * 授权结果在 [onRequestPermissionsResult] 里回到这里继续写。
+     *
+     * 以前只有 Manifest 声明、没有运行时申请 ⇒ Android 7–9 上「保存到图库」必失败
+     * (2026-11-28 平台层审计); 而且写文件原本在**主线程**做整块拷贝, 大图会卡/ANR。
+     */
+    private var pendingSave: (() -> Unit)? = null
+
+    /** 落盘类 IO 的后台线程(保存图片/上传副本), 不占主线程 */
+    private val ioExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+
+    /**
      * 通知按钮在没有同进程消费者时(上划清任务后)会用 Intent 把 App 拉起来并带上动作,
      * 动作先在这里接住, 等 Dart 侧回调注册好(_registerNativeHandler 会调 actionHandlersReady)再执行。
      */
@@ -48,6 +60,7 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         private const val REQUEST_PICK_AUDIO = 4201
+        private const val REQUEST_SAVE_IMAGE = 4202
 
         /** 拉起 App 到 Dart 回调就绪之间的最大容忍时间; 超过就丢弃(过期的「下一首」执行起来很突兀) */
         private const val PLAYBACK_ACTION_TTL_MS = 60_000L
@@ -265,7 +278,8 @@ class MainActivity : FlutterActivity() {
                         result.success(true)
                     }
                     // 保存到系统图库: Q+ 走 MediaStore(免权限), 老系统落公共 Pictures
-                    "saveImage" -> result.success(saveToGallery(bytes, sanitize(filename)))
+                    // (Android 10 以下先申请运行时写权限; 写盘一律挪到后台线程)
+                    "saveImage" -> saveImageWithPermission(bytes, sanitize(filename), result)
                     else -> result.notImplemented()
                 }
             } catch (e: Exception) {
@@ -293,6 +307,14 @@ class MainActivity : FlutterActivity() {
         ensureNotificationPermission()
     }
 
+    /** 保存/分享用的 MIME: 按扩展名推断, 认不出就当 png(历史默认值) */
+    private fun mimeOf(filename: String): String = when {
+        filename.endsWith(".jpg", true) || filename.endsWith(".jpeg", true) -> "image/jpeg"
+        filename.endsWith(".webp", true) -> "image/webp"
+        filename.endsWith(".gif", true) -> "image/gif"
+        else -> "image/png"
+    }
+
     private fun sanitize(name: String): String =
         name.replace(Regex("""[/\\:*?"<>|]"""), "_").ifBlank { "share.png" }
 
@@ -305,11 +327,78 @@ class MainActivity : FlutterActivity() {
         return file
     }
 
+    /**
+     * 保存图片: 先补齐老系统需要的运行时权限, 再在后台线程写。
+     *
+     * 权限只对 Android 10 以下有意义(`maxSdkVersion=28` 的声明就是它); Q+ 走 MediaStore
+     * 免权限。授权被拒就给一条可读错误(不是静默失败), Dart 侧会 showToast。
+     */
+    private fun saveImageWithPermission(
+        bytes: ByteArray,
+        filename: String,
+        result: MethodChannel.Result,
+    ) {
+        val runSave = {
+            ioExecutor.execute {
+                try {
+                    val where = saveToGallery(bytes, filename)
+                    runOnUiThread { result.success(where) }
+                } catch (e: Exception) {
+                    runOnUiThread { result.error("share_error", e.message, null) }
+                }
+            }
+        }
+        val needsPermission = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
+            PackageManager.PERMISSION_GRANTED
+        if (!needsPermission) {
+            runSave()
+            return
+        }
+        // 同一时刻只留一个待处理保存(重复点保存时前一个直接报忙, 不留悬挂的 result)
+        if (pendingSave != null) {
+            result.error("save_busy", "上一次保存还没结束", null)
+            return
+        }
+        pendingSave = {
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                ) == PackageManager.PERMISSION_GRANTED
+            ) {
+                runSave()
+            } else {
+                result.error("save_denied", "没有存储权限, 无法保存到图库", null)
+            }
+            pendingSave = null
+        }
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
+            REQUEST_SAVE_IMAGE,
+        )
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        if (requestCode == REQUEST_SAVE_IMAGE) {
+            // 不管给没给都交给回调判(它在里面自查权限并给出可读错误)
+            pendingSave?.invoke() ?: run { pendingSave = null }
+            return
+        }
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    }
+
     private fun saveToGallery(bytes: ByteArray, filename: String): String {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = android.content.ContentValues().apply {
                 put(MediaStore.Images.Media.DISPLAY_NAME, filename)
-                put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                // MIME 按扩展名推断: 以前一律写 image/png, 但保存的封面/分享卡多是 .jpg,
+                // 相册里会出现「类型不符」的条目
+                put(MediaStore.Images.Media.MIME_TYPE, mimeOf(filename))
                 put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MiniNCM")
                 put(MediaStore.Images.Media.IS_PENDING, 1)
             }
@@ -584,17 +673,20 @@ class MainActivity : FlutterActivity() {
                 result?.success(null)
                 return
             }
-            try {
-                // 复制到 cacheDir/cloud_upload/: Rust 侧按路径读文件做 md5 + 上传
-                val name = queryDisplayName(uri) ?: "upload.mp3"
-                val dir = File(cacheDir, "cloud_upload").apply { mkdirs() }
-                val out = File(dir, name)
-                contentResolver.openInputStream(uri)?.use { input ->
-                    out.outputStream().use { output -> input.copyTo(output) }
-                } ?: throw IllegalStateException("openInputStream 返回 null")
-                result?.success(out.absolutePath)
-            } catch (e: Exception) {
-                result?.error("pick_failed", e.message, null)
+            // 复制到 cacheDir/cloud_upload/: Rust 侧按路径读文件做 md5 + 上传。
+            // 整块拷贝可能几十上百 MB, 必须在后台线程做(主线程会 ANR; 2026-11-28 审计)。
+            val name = queryDisplayName(uri) ?: "upload.mp3"
+            ioExecutor.execute {
+                try {
+                    val dir = File(cacheDir, "cloud_upload").apply { mkdirs() }
+                    val out = File(dir, name)
+                    contentResolver.openInputStream(uri)?.use { input ->
+                        out.outputStream().use { output -> input.copyTo(output) }
+                    } ?: throw IllegalStateException("openInputStream 返回 null")
+                    runOnUiThread { result?.success(out.absolutePath) }
+                } catch (e: Exception) {
+                    runOnUiThread { result?.error("pick_failed", e.message, null) }
+                }
             }
             return
         }

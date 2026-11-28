@@ -41,12 +41,15 @@ cd ui
 #   ② 本项目的目标设备都是 64 位(arm64 手机 / x86_64 模拟器), 32 位机型不在支持范围。
 # 需要恢复 32 位: 去掉下面的 --target-platform, 并给 RUSTFLAGS 加 -C debuginfo-compression=none
 # (注意 cargokit 不转发 RUSTFLAGS 时需要改 ui/rust_builder 的构建参数)。
+# release 也走 --split-per-abi: 不加时产的是**双 ABI 合体包**(实测 57.5MB),
+# 而 CI/Release 发的是 arm64-only(~33MB) —— 本地"release 验收"验的东西和发布件不是同一个
+# (2026-11-28 构建链审计 #3)。拆分后按 ABI 出两个包, 与 Release 资产一一对得上。
 if [ "$MODE" = "release" ]; then
   if [ ! -f android/key.properties ]; then
     echo "WARN: 没有 android/key.properties —— release 包会回落到 debug 签名, 不能对外发布" >&2
   fi
-  flutter build apk --release --target-platform android-arm64,android-x64
-  APK=build/app/outputs/flutter-apk/app-release.apk
+  flutter build apk --release --split-per-abi --target-platform android-arm64,android-x64
+  APK=build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
 else
   flutter build apk --debug --split-per-abi --target-platform android-arm64,android-x64
   echo "OK -> ui/build/app/outputs/flutter-apk/app-x86_64-debug.apk    (模拟器 x86_64)"
@@ -54,6 +57,18 @@ else
   APK=build/app/outputs/flutter-apk/app-x86_64-debug.apk
 fi
 echo "OK -> ui/$APK"
+# ABI 自检(2026-11-28 构建链审计): 产物只允许 64 位 ABI。
+# 这条门的意义是防"又打出一份含 v7a 的 216MB 合体包"——那种包只能装到 32 位机型上崩。
+if command -v unzip >/dev/null 2>&1; then
+  ABIS=$(unzip -Z1 "$APK" 2>/dev/null | sed -n 's#^lib/\([^/]*\)/.*#\1#p' | sort -u | tr '\n' ' ')
+  echo "ABI -> ${ABIS:-<none>}"
+  case " $ABIS " in
+    *" armeabi-v7a "*|*" x86 "*)
+      echo "FAIL: APK 里混进了 32 位 ABI(${ABIS})——检查 --target-platform / ndk.abiFilters" >&2
+      exit 1
+      ;;
+  esac
+fi
 # 签名自检: 打印实际签名证书指纹(便于和 keytool -list 对账)
 SIGNER=$(ls "${ANDROID_HOME:-$HOME/android-dev/sdk}"/build-tools/*/apksigner 2>/dev/null | tail -1)
 if [ -n "$SIGNER" ]; then "$SIGNER" verify --print-certs "$APK" | grep -E 'Signer #1 certificate (DN|SHA-256)'; fi

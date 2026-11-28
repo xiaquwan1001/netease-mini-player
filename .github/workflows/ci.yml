@@ -17,6 +17,7 @@ jobs:
   rust:
     name: Rust tests
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: System deps (alsa for cpal)
@@ -35,6 +36,7 @@ jobs:
   flutter:
     name: Flutter analyze + tests
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -67,6 +69,14 @@ jobs:
       # 放进本 job 只是为了"CI 门清单与 verify 一致", 跑起来 <1s。
       - name: 文档门 (相对链接死链 + docs 根索引)
         run: bash tools/ci-gates.sh docs
+      # 三道"固定门"以前只在 tools/ci-gates.sh verify 里, 任何 workflow 都没调用
+      # ⇒ AGENTS.md 写着是门、实际没人守(2026-11-28 构建链审计 #4)。
+      - name: 锁中毒门 (生产代码禁 lock().unwrap())
+        run: bash tools/ci-gates.sh lock-poison
+      - name: 行留白门 (行 padding 只许具名口径)
+        run: bash tools/ci-gates.sh row-padding
+      - name: 全局槽位门 (全局槽位只许声明方/home_wiring 写)
+        run: bash tools/ci-gates.sh global-slots
       # 唯一的全量测试入口: 含 golden(18 张整屏像素)。只排除 network —— CI 没有
       # 出口网络与凭据。golden 的渲染环境靠上一步的 fonts-noto-cjk + 固定的
       # Flutter 3.47.9 对齐本地。口径与 release.yml / tools/ci.sh 完全一致(P-13)。
@@ -80,6 +90,7 @@ jobs:
   android:
     name: Android JVM (unit tests + lintDebug)
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -144,6 +155,7 @@ jobs:
   build-android-debug:
     name: Debug APK (x86_64 + arm64)
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     needs: [rust, flutter]
     steps:
       - uses: actions/checkout@v4
@@ -232,6 +244,7 @@ jobs:
   build-linux:
     name: Build Linux bundle (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
     needs: [rust, flutter]
     strategy:
       fail-fast: false

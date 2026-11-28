@@ -49,6 +49,20 @@ android {
         resValue("string", "app_name", "轻音 MiniNCM")
         // P-11: instrumented 测试(需要模拟器, 见 src/androidTest/)。
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // ABI 约束: 本项目的目标设备只有 64 位(arm64 真机 / x86_64 模拟器)。
+        // 不写这里时 `flutter build apk`(不带 --split-per-abi) 会打进 3–4 个 ABI,
+        // 实测 226.8MB(含已不支持的 v7a, 其链接在 rustc+NDK 下本来就失败)。
+        // 口径必须与 tools/build-android.sh 的 --target-platform 一致。
+        //
+        // **不能与 splits 同时存在**: `--split-per-abi` 时 Flutter 插件自己按
+        // --target-platform 配 `splits.abi`, AGP 会直接报
+        // "Conflicting configuration : 'x86_64,arm64-v8a' in ndk abiFilters cannot be
+        // present when splits abi filters are set"(2026-11-28 实测) ⇒ 只在没开拆分时兜底。
+        if (!(project.findProperty("split-per-abi")?.toString()?.toBoolean() ?: false)) {
+            ndk {
+                abiFilters += listOf("arm64-v8a", "x86_64")
+            }
+        }
     }
 
     signingConfigs {

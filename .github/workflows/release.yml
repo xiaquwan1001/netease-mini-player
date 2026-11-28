@@ -17,6 +17,7 @@ jobs:
   verify:
     name: Tests gate before release
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       # Android JVM 单测(:app:testDebugUnitTest)要 JDK21 + Android SDK 的 platform/build-tools。
@@ -94,20 +95,30 @@ jobs:
       # 文档门(2026-11-19): 与 ci.yml / verify 同口径(链接死链 0 + docs 根索引覆盖)
       - name: 文档门 (相对链接死链 + docs 根索引)
         run: bash tools/ci-gates.sh docs
+      # 三道固定门(2026-11-28 构建链审计 #4): 以前只在 verify 里, 任何 workflow 都没调
+      - name: 锁中毒门 (生产代码禁 lock().unwrap())
+        run: bash tools/ci-gates.sh lock-poison
+      - name: 行留白门 (行 padding 只许具名口径)
+        run: bash tools/ci-gates.sh row-padding
+      - name: 全局槽位门 (全局槽位只许声明方/home_wiring 写)
+        run: bash tools/ci-gates.sh global-slots
       # 唯一测试入口: 只排 network, **含 golden**(与 ci.yml / tools/ci.sh 同口径)
       - name: widget/unit tests + golden (offline)
         run: bash tools/ci-gates.sh flutter-test
       # 发版门加上 Android JVM 单测(三端共享 EQ fixture 的 Kotlin 解析): 以前发出去的
-      # APK 从没跑过它(审计 P-14)。**lint 不进发版门**: 现状 67 error(66 × media3
-      # UnsafeOptInUsageError + 1 × GestureBackNavigation), 红了会直接堵死发版;
-      # 修到 0 之后再把它加进来。详见 ci.yml 的 android job 注释。
+      # APK 从没跑过它(审计 P-14)。
       - name: Android JVM 单测 (:app:testDebugUnitTest)
         run: bash tools/ci-gates.sh android-unit
+      # lintDebug 已经是 ci.yml 的阻塞门(error 早已清到 0); 发版门不许比 CI 弱,
+      # 2026-11-28 起补上(此前 release.yml 里"67 error 会堵死发版"的理由已过期)。
+      - name: Android lintDebug (阻塞门)
+        run: bash tools/ci-gates.sh android-lint
 
   # ---- Android(arm64) + Linux(x64) ----
   build:
     name: Build Android + Linux assets
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     needs: [verify]
     steps:
       - uses: actions/checkout@v4
@@ -186,6 +197,21 @@ jobs:
             flutter build apk --release --target-platform android-arm64
           '
 
+      # ABI 自检(2026-11-28 构建链审计): 发布件只允许 64 位 ABI。
+      # 没有 --split-per-abi 时 flutter 会打进所有 ABI(实测 216MB 合体包), 那种包
+      # 既超出发布口径, 也意味着 --target-platform 传错了。
+      - name: Verify APK ABIs (64-bit only)
+        run: |
+          APK=ui/build/app/outputs/flutter-apk/app-release.apk
+          ABIS=$(unzip -Z1 "$APK" | sed -n 's#^lib/\([^/]*\)/.*#\1#p' | sort -u | tr '\n' ' ')
+          echo "ABI -> ${ABIS:-<none>}"
+          case " $ABIS " in
+            *" armeabi-v7a "*|*" x86 "*)
+              echo "::error::APK 里混进了 32 位 ABI($ABIS)"
+              exit 1
+              ;;
+          esac
+
       # 自检: 配了正式 keystore 就不许产出 debug 签名的包
       - name: Verify APK signature
         run: |
@@ -246,6 +272,7 @@ jobs:
   build-linux-arm64:
     name: Build Linux arm64 assets
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
     needs: [verify]
     steps:
       - uses: actions/checkout@v4
@@ -316,6 +343,7 @@ jobs:
   build-windows:
     name: Build Windows x64 asset
     runs-on: windows-latest
+    timeout-minutes: 60
     needs: [verify]
     steps:
       - uses: actions/checkout@v4
@@ -404,6 +432,7 @@ jobs:
   publish:
     name: Publish release
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     needs: [build, build-windows, build-linux-arm64]
     if: startsWith(github.ref, 'refs/tags/')
     steps:
