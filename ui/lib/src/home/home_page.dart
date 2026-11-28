@@ -157,6 +157,12 @@ class _HomePageState extends State<HomePage> {
   /// 图片 Widget 重新解析, 占位符会高频闪烁, 列表滚动位置也会丢
   final Set<int> _tabVisited = <int>{1};
 
+  /// 底部导航的缓存键与结果: 导航栏只依赖这几项, 键没变就投同一实例。
+  /// 否则每次 build 都新建 NavigationBar ⇒ playerBarSlot 每次都不相等 ⇒
+  /// _PlayerBarChrome 四层 builder 全重建(审计 §3)。
+  Object? _bottomBarKey;
+  Widget? _bottomBar;
+
   // ---- 搜索 ----
   /// 搜索状态机(结果/联想/历史/热词/请求代次/联想防抖/忙碌标志)在拆壳 S3 搬到
   /// `search_state.SearchController`; 这里只留输入框与焦点(页面持有, 注入给 controller)。
@@ -1248,6 +1254,22 @@ class _HomePageState extends State<HomePage> {
   /// 底部 tab 属于首页: **手机上**有全屏页压在首页之上时返回 null(播放条由
   /// [playerBarData] 负责, 此时它自己吃掉系统手势区), 弹层/对话框不算。
   Widget? _buildBottomBar(BuildContext context) {
+    // 导航栏只由这四项决定: tab / 是否被全屏页压住 / 挡位 / 平台。
+    // 键没变就返回上一份实例 —— 投递槽位按实例相等判重, 不换实例就不重建底栏。
+    final isRailTier =
+        layoutTierFor(MediaQuery.sizeOf(context).width) == LayoutTier.wide;
+    final key = (
+      tab: _tab,
+      deep: pageDepth.value > 1,
+      rail: isRailTier,
+      desktop: isDesktopPlatform,
+    );
+    if (key == _bottomBarKey) return _bottomBar;
+    _bottomBarKey = key;
+    return _bottomBar = _buildBottomBarInstance(context, isRailTier);
+  }
+
+  Widget? _buildBottomBarInstance(BuildContext context, bool isRailTier) {
     // 桌面(Linux/Windows)上导航是**窗口常驻外壳**, 全屏页压上来时不让位:
     // 让位会让根布局(_PlayerBarChrome)在转场第一帧从 Row(rail + 右列) 换成 Column,
     // 一级页内容横向跳 kRailWidth、播放条从 (窗口宽 - rail) 变成窗口宽 ——
@@ -1258,7 +1280,7 @@ class _HomePageState extends State<HomePage> {
     // 档位只由可用宽度决定(不看设备类型): 桌面窗口缩窄就退回底部导航。
     // 语义与 NavigationBar 一一对应: 同一 selectedIndex / 同一回调 / 标签常显
     // (alwaysShow ↔ labelType.all) / 同一 pageDepth 让位(上面那行仍然先判, 且只手机上让)。
-    if (layoutTierFor(MediaQuery.sizeOf(context).width) == LayoutTier.wide) {
+    if (isRailTier) {
       return NavigationRail(
         selectedIndex: _tab,
         onDestinationSelected: _onTabSelected,

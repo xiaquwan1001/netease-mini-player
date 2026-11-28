@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/main.dart' show MiniNcmApp;
+import 'package:minincm/src/app_shell.dart' show playerBarSlot;
 import 'package:minincm/src/platform_is.dart' show debugForceAndroid;
 import 'package:minincm/src/playback.dart';
 
@@ -69,6 +70,27 @@ void main() {
       identical(after, before),
       isTrue,
       reason: '纯位置 tick 不得重建整页(只有播放条快照该刷新)',
+    );
+  });
+
+  testWidgets('底部导航只在结构键变化时才投新实例', (tester) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(const MiniNcmApp());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    addTearDown(() => playerBarSlot.value = null);
+
+    final navBefore = playerBarSlot.value;
+    expect(navBefore, isA<NavigationBar>(), reason: '根页面应有底部导航');
+
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(
+      identical(playerBarSlot.value, navBefore),
+      isTrue,
+      reason: '导航栏结构键没变时不得投新实例(否则底栏四层 builder 全重建)',
     );
   });
 }
