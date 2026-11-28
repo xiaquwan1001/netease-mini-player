@@ -28,6 +28,8 @@
 //! - 只缓存**成功**的结果; 错误(尤其是 405/风控)不缓存, 免得把瞬时故障钉住。
 //! - 同 key 并发: 只有一个请求真打上游, 其余等它出结果后直接命中缓存
 //!   (靠每 key 一把 `tokio::sync::Mutex`; 不引入额外依赖)。
+//! - 同 key 并发时 leader **失败**也共享: 等待者拿到同一份错误直接返回, 不会逐个变 leader
+//!   串行重打上游(那是 405 的最坏情形, 2026-11-28 Rust 审计 R6)。
 
 use std::collections::HashMap;
 use std::future::Future;
@@ -37,7 +39,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
-use ncm_provider::ProviderResult;
+use ncm_provider::{ProviderError, ProviderResult};
 
 /// 默认 TTL: 300s。
 pub const DEFAULT_TTL: Duration = Duration::from_secs(300);
@@ -165,8 +167,41 @@ struct Inner {
     entries: HashMap<String, Entry>,
     /// 当前所有条目的字节总和(淘汰按它判)
     bytes: usize,
-    /// 同 key 单飞: 正在加载的 key -> 该 key 的串行锁。
-    inflight: HashMap<String, Arc<tokio::sync::Mutex<()>>>,
+    /// 同 key 单飞: 正在加载的 key -> 这一代"在飞"状态(串行锁 + 失败结果)。
+    inflight: HashMap<String, Arc<Inflight>>,
+}
+
+/// 同一个 key 的一代"在飞"状态: leader 持串行锁打上游, 其余在锁上排队。
+///
+/// `failure` 是审计 R6 的修正点: 旧实现 leader 失败只放锁, 等待者挨个拿到锁、锁内重查
+/// 缓存仍是未命中, 于是**各自变 leader 再打一次上游** —— N 个并发同 key 撞上 405
+/// 就是串行 N 次请求, 正好把风控喂饱。现在 leader 把同一份错误写进这一代, 等待者读到
+/// 就直接返回同一错误; 要重试的是**下一轮**调用(条目在 leader 收尾时摘掉, 新调用重新开局)。
+struct Inflight {
+    /// 串行锁: leader 持锁加载, 等待者在 `lock()` 上排队。
+    lock: tokio::sync::Mutex<()>,
+    /// 这一代 leader 的失败结果(等待者共享); 成功时为 `None`(结果已在缓存里)。
+    failure: Mutex<Option<ProviderError>>,
+}
+
+impl Inflight {
+    fn new() -> Self {
+        Self {
+            lock: tokio::sync::Mutex::new(()),
+            failure: Mutex::new(None),
+        }
+    }
+
+    fn failure(&self) -> Option<ProviderError> {
+        self.failure
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
+    fn record_failure(&self, err: &ProviderError) {
+        *self.failure.lock().unwrap_or_else(|e| e.into_inner()) = Some(err.clone());
+    }
 }
 
 /// 进程内只读响应缓存(TTL + LRU + 单飞)。线程安全, 用 `&self` 即可。
@@ -234,10 +269,13 @@ impl ReadCache {
     }
 
     /// 清空全部缓存。会话变化(登录/登出/切账号)时必须调用。
+    ///
+    /// 在飞条目一起清: 排队的等待者可能属于旧账号的那一代, 不能让它们的响应写进新会话。
     pub fn clear(&self) {
         let mut inner = self.lock();
         inner.entries.clear();
         inner.bytes = 0;
+        inner.inflight.clear();
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
@@ -315,22 +353,22 @@ impl ReadCache {
         );
     }
 
-    fn inflight_lock(&self, key: &str) -> Arc<tokio::sync::Mutex<()>> {
+    fn inflight_lock(&self, key: &str) -> Arc<Inflight> {
         let mut inner = self.lock();
-        if let Some(lock) = inner.inflight.get(key) {
-            return lock.clone();
+        if let Some(inflight) = inner.inflight.get(key) {
+            return inflight.clone();
         }
-        let lock = Arc::new(tokio::sync::Mutex::new(()));
-        inner.inflight.insert(key.to_string(), lock.clone());
-        lock
+        let inflight = Arc::new(Inflight::new());
+        inner.inflight.insert(key.to_string(), inflight.clone());
+        inflight
     }
 
-    fn release_inflight(&self, key: &str, lock: &Arc<tokio::sync::Mutex<()>>) {
+    fn release_inflight(&self, key: &str, inflight: &Arc<Inflight>) {
         let mut inner = self.lock();
         if inner
             .inflight
             .get(key)
-            .is_some_and(|current| Arc::ptr_eq(current, lock))
+            .is_some_and(|current| Arc::ptr_eq(current, inflight))
         {
             inner.inflight.remove(key);
         }
@@ -359,20 +397,29 @@ impl ReadCache {
         }
         // 同 key 单飞: 拿到这把锁的才是 leader, 其余在这里排队;
         // leader 写回缓存后它们醒来直接命中(所以锁内要再查一次)。
-        let lock = self.inflight_lock(key);
+        let inflight = self.inflight_lock(key);
         // 登记条目的摘除靠 Drop: leader 在 `load().await` 处被取消(Dart 侧 future 丢弃 /
         // 组件 dispose)时也会走到这里 —— 以前是语句式的 `release_inflight`, 取消路径直接跳过,
         // `inflight` 里留下永久条目且该 key 的单飞语义失效。
         let _inflight = InflightGuard {
             cache: self,
             key,
-            lock: lock.clone(),
+            inflight: inflight.clone(),
         };
-        let guard = lock.lock().await;
+        let guard = inflight.lock.lock().await;
         if let Some(hit) = self.get(key) {
             return Ok(hit);
         }
+        // 同一代 leader 已经失败: 等待者拿**同一份错误**直接返回, 不再自己变 leader(R6)
+        if let Some(err) = inflight.failure() {
+            return Err(err);
+        }
         let result = load().await;
+        // 失败必须在**放锁之前**写回: 否则刚醒来的等待者会看到一个"还没有结论"的条目,
+        // 又各自去打一次上游(R6)。
+        if let Err(err) = &result {
+            inflight.record_failure(err);
+        }
         // 先放锁(_inflight 随函数结束才 drop), 后来者不会拿到一把已无人等的锁去排队
         drop(guard);
         match result {
@@ -391,24 +438,23 @@ impl ReadCache {
 /// 在飞登记条目的 RAII 守卫: 无论 leader 正常结束、报错还是被取消, 都摘掉 `inflight` 条目。
 ///
 /// 对应 `ncm-plugin` 的 `CoalesceLeader`: 那个还多了"把等待者唤醒成可重试", 而本缓存
-/// 的等待者只是排队拿同一把锁, leader 消失后它们会依次拿到锁并在锁内重查缓存(未命中就自己
-/// 变 leader), 所以这里只需要收尾条目。
+/// 的等待者只是排队拿同一把锁, 拿到锁后先看这一代的失败结果(R6), 还没有结论再自己变 leader。
 struct InflightGuard<'a> {
     cache: &'a ReadCache,
     key: &'a str,
-    lock: Arc<tokio::sync::Mutex<()>>,
+    inflight: Arc<Inflight>,
 }
 
 impl Drop for InflightGuard<'_> {
     fn drop(&mut self) {
-        self.cache.release_inflight(self.key, &self.lock);
+        self.cache.release_inflight(self.key, &self.inflight);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ncm_provider::ProviderError;
+    use ncm_provider::{ProviderError, ProviderErrorKind};
     use std::sync::atomic::AtomicUsize;
 
     /// 可计数的假 fetcher: 返回 `{"payload": ..., "n": <第几次调用>}`。
@@ -555,6 +601,66 @@ mod tests {
             handle.await.expect("task 不应 panic").expect("结果应成功");
         }
         assert_eq!(fetcher.calls(), 1, "并发同 key 只允许打一次上游");
+    }
+
+    /// 审计 R6 判据: 同 key 并发**失败**时, 等待者共享 leader 的那份错误直接返回,
+    /// 不逐个变 leader 串行重试.
+    ///
+    /// 修复前: leader 失败只放锁, 8 个等待者挨个拿到锁、锁内重查缓存仍空, 于是各自打一次
+    /// 上游(calls == 8) —— 正是撞 405 时把风控喂饱的那种形状.
+    #[tokio::test]
+    async fn concurrent_same_key_failure_hits_upstream_once() {
+        let cache = Arc::new(ReadCache::default());
+        let calls = Arc::new(AtomicUsize::new(0));
+        let key = cache_key(endpoint::SEARCH_HOT, &[]);
+
+        let mut handles = Vec::new();
+        for _ in 0..8 {
+            let cache = cache.clone();
+            let calls = calls.clone();
+            let key = key.clone();
+            handles.push(tokio::spawn(async move {
+                cache
+                    .get_or_load(endpoint::SEARCH_HOT, &key, || async {
+                        calls.fetch_add(1, Ordering::SeqCst);
+                        // 让出执行权, 保证其它 7 个任务都排在这一代里
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                        Err(ProviderError::risk_control("code=405 操作频繁"))
+                    })
+                    .await
+            }));
+        }
+        for handle in handles {
+            let err = handle
+                .await
+                .expect("task 不应 panic")
+                .expect_err("上游失败必须上抛");
+            assert_eq!(err.kind, ProviderErrorKind::RiskControl);
+            assert_eq!(
+                err.detail, "code=405 操作频繁",
+                "等待者拿到的必须是 leader 那份错误"
+            );
+        }
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            1,
+            "并发同 key 失败只允许打一次上游(修复前是 8 次)"
+        );
+        assert!(cache.is_empty(), "失败不进缓存");
+        assert!(
+            cache.lock().inflight.is_empty(),
+            "失败收尾后不留 in-flight 条目"
+        );
+
+        // 失败只是"这一代"的结论, 不能把 key 钉死: 下一轮调用重新开一局, 正常打上游
+        let ok = cache
+            .get_or_load(endpoint::SEARCH_HOT, &key, || async {
+                Ok(serde_json::json!({ "code": 200 }))
+            })
+            .await
+            .expect("失败之后下一轮仍应正常打上游");
+        assert_eq!(ok["code"], 200);
+        assert_eq!(cache.len(), 1);
     }
 
     #[tokio::test]
