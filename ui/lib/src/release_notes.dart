@@ -12,6 +12,10 @@ import 'update_checker.dart' show compareVersions;
 ///
 /// 发版时在这里加一条即可; 没有条目的版本不显示公告(不是每个 patch 都值得说)。
 const Map<String, List<String>> kReleaseHighlights = <String, List<String>>{
+  'v0.42.1': <String>[
+    '安装包更小: 打开代码与资源压缩(release 包省 3.4MB, 安卓 dex 从 12.8MB 降到 2.8MB)',
+    '已在安卓模拟器与 Linux AppImage 上实测: 安装/冷启动/播放/通知五按钮/分享 全部正常',
+  ],
   'v0.42.0': <String>[
     '弱网切歌/暂停不再像卡住: 解码与读盘移出音频线程, 边下边播追上下载进度时也不再噼嗒',
     '更省流量: 艺人/播客/榜单/新碟等页面回退重进不再每次都重新请求',

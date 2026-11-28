@@ -85,6 +85,15 @@ android {
             resValue("string", "app_name", "轻音 MiniNCM dev")
         }
         release {
+            // R8 + 资源压缩(2026-11-28 构建链审计 #1): 之前两项都是默认 false,
+            // media3/kotlin 全量进 classes.dex(实测 1,927,164 B)。
+            // 规则见 app/proguard-rules.pro(只保留反射入口, 不抄 AAR 的 consumer rules)。
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             signingConfig = if (hasReleaseKeystore) {
                 signingConfigs.getByName("release")
             } else {
