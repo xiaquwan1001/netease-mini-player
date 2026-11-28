@@ -98,10 +98,11 @@ class _RecommendViewState extends State<RecommendView> {
 
   @override
   Widget build(BuildContext context) {
-    // 卡片排列(一排/两排)是用户设置, 改了要立刻反映到已渲染的区块
-    return AnimatedBuilder(
-      animation: AppSettings.instance,
-      builder: (context, _) => _buildBody(),
+    // 卡片排列(一排/两排)是用户设置, 改了要立刻反映到已渲染的区块。
+    // 只订阅外观域: 音量滑块/交互记录这类全量通知不该让推荐页重建。
+    return AppSettingsScopedBuilder(
+      domains: const {AppSettingsDomain.appearance},
+      builder: (context) => _buildBody(),
     );
   }
 

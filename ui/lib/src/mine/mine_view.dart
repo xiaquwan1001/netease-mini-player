@@ -636,11 +636,14 @@ class _PlaylistsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 交互记录变了要重排, 所以挂在 AppSettings 上重建(数据由 AsyncView 持有,
-    // rebuild 只重算顺序, 不会重新取数)。
-    return AnimatedBuilder(
-      animation: AppSettings.instance,
-      builder: (context, _) => Column(
+    // 交互记录变了要重排, 所以按域订阅(数据由 AsyncView 持有,
+    // rebuild 只重算顺序, 不会重新取数)。音量滑块等其它域的通知不重建本页。
+    return AppSettingsScopedBuilder(
+      domains: const {
+        AppSettingsDomain.appearance,
+        AppSettingsDomain.interactions,
+      },
+      builder: (context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SectionHeader(
@@ -860,9 +863,12 @@ class _AlbumPodcastSectionsState extends State<_AlbumPodcastSections> {
   @override
   Widget build(BuildContext context) {
     // 交互记录变化(打开过某个专辑/播客)要立刻换位置: 挂在 AppSettings 上重建。
-    return AnimatedBuilder(
-      animation: AppSettings.instance,
-      builder: (context, _) {
+    return AppSettingsScopedBuilder(
+      domains: const {
+        AppSettingsDomain.appearance,
+        AppSettingsDomain.interactions,
+      },
+      builder: (context) {
         final settings = AppSettings.instance;
         final albumLatest = latestInteractionMs(
           _albums,

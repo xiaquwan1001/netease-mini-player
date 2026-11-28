@@ -25,10 +25,11 @@ class ChartSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 一排/两排是用户设置, 改了立刻反映(搜索页没有外层 AnimatedBuilder)。
-    return AnimatedBuilder(
-      animation: AppSettings.instance,
-      builder: (context, _) => Column(
+    // 一排/两排是用户设置, 改了立刻反映(搜索页没有外层订阅)。
+    // 只订阅外观域, 不被音量/交互记录的全量通知连带重建。
+    return AppSettingsScopedBuilder(
+      domains: const {AppSettingsDomain.appearance},
+      builder: (context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _Header(
