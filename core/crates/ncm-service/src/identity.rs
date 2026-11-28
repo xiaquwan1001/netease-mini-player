@@ -147,6 +147,67 @@ impl AccountBook {
     }
 }
 
+// ---------------- 会话/账号簿的纯内存计算(供"锁外落盘"的两段式调用) ----------------
+//
+// 下面四个函数**不碰磁盘**: 落盘(`IdentityStore::save`/`save_accounts` → 钥匙串
+// `set_password`, 无超时)必须由调用方在 `Core` 锁外做 —— 持 `Core` 锁做阻塞外部 IO
+// 会让全进程所有 FFI 入口(含 init/poll)一起挂(锁审计 #1).
+// 调用顺序: 短锁取快照 → 锁外这些纯计算 + 落盘 → 短锁 `Core::commit_session`.
+
+/// 把外部拿到的登录凭据(网页/扫码/短信登录)并入会话: 设备指纹保留. 纯内存.
+pub fn login_session(session: &Session, incoming: &str) -> Session {
+    let mut next = session.clone();
+    next.cookie = merge_device_cookie(&session.cookie, incoming, &session.device_id);
+    next
+}
+
+/// 退出登录: 只清登录凭据, 设备指纹(deviceId/_ntes_*/WNMCID/NMTID)保留. 纯内存.
+pub fn logout_session(session: &Session) -> Session {
+    let mut next = session.clone();
+    next.cookie = clear_login_cookie(&next.cookie);
+    next.profile = None;
+    next
+}
+
+/// 记住账号: 账号簿 upsert(只存登录凭据, 指纹共享) + 下一份会话. 纯内存.
+pub fn prepare_remember(
+    session: &Session,
+    mut book: AccountBook,
+    profile: &ncm_domain::Profile,
+) -> (AccountBook, Session) {
+    book.upsert(StoredAccount {
+        user_id: profile.user_id,
+        nickname: profile.nickname.clone(),
+        avatar_url: profile.avatar_url.clone(),
+        vip: profile.vip,
+        cookie: extract_login_cookie(&session.cookie),
+    });
+    let mut next = session.clone();
+    next.profile = Some(profile.clone());
+    (book, next)
+}
+
+/// 切到已保存的账号: 账号簿置 active + 下一份会话. 纯内存; 账号簿里没这个 uid ⇒ `None`.
+pub fn prepare_switch(
+    session: &Session,
+    mut book: AccountBook,
+    user_id: u64,
+) -> Option<(AccountBook, Session)> {
+    let account = book.switch(user_id)?;
+    // 设备指纹取自当前会话(与账号无关), 登录凭据换成目标账号的
+    let device_only = clear_login_cookie(&session.cookie);
+    let cookie = merge_device_cookie(&device_only, &account.cookie, &session.device_id);
+    let mut next = session.clone();
+    next.cookie = cookie;
+    next.profile = Some(ncm_domain::Profile {
+        user_id,
+        nickname: account.nickname,
+        avatar_url: account.avatar_url,
+        vip: account.vip,
+    });
+    Some((book, next))
+}
+
 pub struct IdentityStore {
     dir: PathBuf,
     /// 凭据后端(启动时由 Core::open 经 credential_store::open_backend 注入).
@@ -180,6 +241,20 @@ impl IdentityStore {
 
     pub fn credential_status(&self) -> CredentialStatus {
         lock_ignore_poison(&self.cred_status).clone()
+    }
+
+    /// 用户明确同意/撤销"0600 明文回退": 写策略标记 → 重建后端 → 补跑一次迁移.
+    ///
+    /// **阻塞**(后端探测有 `PROBE_TIMEOUT` 2s 上限, 迁移会写钥匙串) ⇒ 调用方必须
+    /// 在 `Core` 锁外调(`ncm-ffi` 的 `consent_plaintext_storage` 先取 `store_handle()`).
+    pub fn set_plaintext_consent(&self, consent: bool) -> io::Result<()> {
+        let mut policy = credential_store::CredentialPolicy::load(&self.dir);
+        policy.plaintext_consent = consent;
+        policy.save(&self.dir)?;
+        let (creds, status) = credential_store::open_backend(&self.dir);
+        self.set_credential_backend(creds, status);
+        let _ = self.migrate_legacy_cleartext();
+        Ok(())
     }
 
     /// 共享句柄(Core::forget_account 用来删账号凭据)

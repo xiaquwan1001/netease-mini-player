@@ -51,7 +51,10 @@ pub(crate) fn lock_ignore_poison<'a, T>(m: &'a Mutex<T>) -> MutexGuard<'a, T> {
 
 /// 组装好的应用核心(不含 UI/播放)
 pub struct Core {
-    pub store: IdentityStore,
+    /// 身份/账号簿存储. 存**共享句柄**而不是拥有值: 它的写路径(`save` → 钥匙串
+    /// `set_password`, 无超时)是阻塞外部 IO, FFI 入口要能绕开 `Core` 锁去做
+    /// (锁审计 #1, 见 [`Core::store_handle`]).
+    pub store: Arc<IdentityStore>,
     pub session: ncm_domain::Session,
     pub providers: ProviderRegistry,
     pub netease: Arc<NeteaseProvider>,
@@ -103,7 +106,7 @@ impl Core {
     ///
     /// 凭据链: 选后端 → 旧明文迁移(best-effort, 失败保留明文并上报) → 加载会话.
     pub fn open(data_dir: &Path) -> std::io::Result<Self> {
-        let store = IdentityStore::open(data_dir)?;
+        let store = Arc::new(IdentityStore::open(data_dir)?);
         let (creds, status) = credential_store::open_backend(data_dir);
         store.set_credential_backend(creds, status);
         let _ = store.migrate_legacy_cleartext();
@@ -130,9 +133,24 @@ impl Core {
     /// 登录成功后调用: 持久化并热更新 provider
     pub fn apply_session(&mut self, session: ncm_domain::Session) -> std::io::Result<()> {
         self.store.save(&session)?;
+        self.commit_session(session);
+        Ok(())
+    }
+
+    /// store 的**共享句柄**(FFI 层用它绕开 `Core` 锁做阻塞外部 IO).
+    ///
+    /// 拿到之后**不要再回头调 `core()`**: 钥匙串 `set_password`(zbus 阻塞, 无超时)与
+    /// `fsutil` 的 fsync 一律在锁外做, 见 [`persist_session`] 与 `ncm-ffi` 的账号入口.
+    pub fn store_handle(&self) -> Arc<IdentityStore> {
+        Arc::clone(&self.store)
+    }
+
+    /// 只改内存态 + 热更新 provider, **不碰磁盘**.
+    ///
+    /// 锁外的落盘成功后再调它: 失败时内存态就不前进(错返给 UI, 下次调用可重试).
+    pub fn commit_session(&mut self, session: ncm_domain::Session) {
         self.netease.update_session(session.clone());
         self.session = session;
-        Ok(())
     }
 
     // ---------------- 多账号 ----------------
@@ -146,50 +164,27 @@ impl Core {
         &mut self,
         profile: &ncm_domain::Profile,
     ) -> std::io::Result<AccountBook> {
-        let mut book = self.store.load_accounts()?;
-        book.upsert(StoredAccount {
-            user_id: profile.user_id,
-            nickname: profile.nickname.clone(),
-            avatar_url: profile.avatar_url.clone(),
-            vip: profile.vip,
-            cookie: identity::extract_login_cookie(&self.session.cookie),
-        });
+        let (book, next) =
+            identity::prepare_remember(&self.session, self.store.load_accounts()?, profile);
         self.store.save_accounts(&book)?;
-        let mut next = self.session.clone();
-        next.profile = Some(profile.clone());
         self.apply_session(next)?;
         Ok(book)
     }
 
     /// 直接切到已保存的账号(不用重新登录); 返回是否切换成功
     pub fn switch_account(&mut self, user_id: u64) -> std::io::Result<bool> {
-        let mut book = self.store.load_accounts()?;
-        let Some(account) = book.switch(user_id) else {
+        let Some((book, next)) =
+            identity::prepare_switch(&self.session, self.store.load_accounts()?, user_id)
+        else {
             return Ok(false);
         };
-        // 设备指纹取自当前会话(与账号无关), 登录凭据换成目标账号的
-        let device_only = identity::clear_login_cookie(&self.session.cookie);
-        let cookie =
-            identity::merge_device_cookie(&device_only, &account.cookie, &self.session.device_id);
-        let mut next = self.session.clone();
-        next.cookie = cookie;
-        next.profile = Some(ncm_domain::Profile {
-            user_id,
-            nickname: account.nickname,
-            avatar_url: account.avatar_url,
-            vip: account.vip,
-        });
         self.apply_session(next)?;
         self.store.save_accounts(&book).map(|_| true)
     }
 
     /// 把外部拿到的登录凭据(网页/扫码登录)合并进会话并落盘: 设备指纹保留.
     pub fn apply_login_cookie(&mut self, incoming: &str) -> std::io::Result<()> {
-        let merged =
-            identity::merge_device_cookie(&self.session.cookie, incoming, &self.session.device_id);
-        let mut next = self.session.clone();
-        next.cookie = merged;
-        self.apply_session(next)
+        self.apply_session(identity::login_session(&self.session, incoming))
     }
 
     /// 从账号簿移除(不改变当前登录态, 只是忘掉这个账号的凭据)
@@ -206,10 +201,7 @@ impl Core {
 
     /// 退出登录: 清凭据(账号仍留在账号簿里, 下次可一键切回)
     pub fn logout(&mut self) -> std::io::Result<AccountBook> {
-        let mut next = self.session.clone();
-        next.cookie = identity::clear_login_cookie(&next.cookie);
-        next.profile = None;
-        self.apply_session(next)?;
+        self.apply_session(identity::logout_session(&self.session))?;
         let mut book = self.store.load_accounts()?;
         book.clear_active();
         self.store.save_accounts(&book)?;
@@ -227,25 +219,24 @@ impl Core {
 
     /// 用户明确同意/撤销"0600 明文回退"(设置页入口). 同意后立即重建后端并
     /// 补跑一次迁移(把仍在明文里的凭据搬走); 撤销只写标记, 不删已有明文.
+    ///
+    /// 阻塞(后端探测 2s + 钥匙串写) ⇒ FFI 走 [`Core::store_handle`] 在锁外调
+    /// [`IdentityStore::set_plaintext_consent`](identity::IdentityStore::set_plaintext_consent).
     pub fn set_plaintext_consent(&mut self, consent: bool) -> std::io::Result<()> {
-        let dir = self.store_dir();
-        let mut policy = credential_store::CredentialPolicy::load(&dir);
-        policy.plaintext_consent = consent;
-        policy.save(&dir)?;
-        let (creds, status) = credential_store::open_backend(&dir);
-        self.store.set_credential_backend(creds, status);
-        let _ = self.store.migrate_legacy_cleartext();
-        Ok(())
+        self.store.set_plaintext_consent(consent)
     }
+}
 
-    fn store_dir(&self) -> PathBuf {
-        // IdentityStore 没暴露 dir; 借 path() 的 parent 足够(同一数据目录)
-        self.store
-            .path()
-            .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_default()
-    }
+/// 会话落盘的**两段式**序列: 短锁取 store 句柄 → 锁外 `save`(钥匙串 put 可能
+/// 无界阻塞) → 短锁只提交内存态.
+///
+/// `ncm-ffi` 的登录入口(扫码/短信/cookie)都走它, 单测
+/// `slow_credential_put_does_not_block_readers` 用同一条路径验证锁不被 IO 占住.
+pub fn persist_session(core: &Mutex<Core>, session: ncm_domain::Session) -> std::io::Result<()> {
+    let store = lock_ignore_poison(core).store_handle();
+    store.save(&session)?;
+    lock_ignore_poison(core).commit_session(session);
+    Ok(())
 }
 
 /// 插件宿主的 Rust 侧 API(非 Android; FFI 出口在 `ncm-ffi` 的 `api/plugin.rs`).
@@ -425,5 +416,146 @@ impl Core {
             plugin,
             builtin: self.providers.first_with(cap),
         }
+    }
+}
+
+#[cfg(test)]
+mod lock_scope_tests {
+    //! 锁审计 #1: 凭据落盘(钥匙串 `put`, **无超时**)与后端探测必须在 `Core` 锁外做.
+    //!
+    //! 现状根因: FFI 入口持全局 `Core` 锁调 `IdentityStore::save` → `CredentialStore::put`
+    //! (secret-service/zbus 阻塞) → `fsutil` 的 fsync. 钥匙串被锁时这一条不返回 ⇒
+    //! 全进程所有 FFI 入口(含 init/poll)一起挂. 这里用"put 睡 1s"的假后端把那种
+    //! 无界阻塞缩短成可测的 1s, 断言只读路径的**锁等待**不被它带走.
+
+    use super::*;
+    use crate::credential_store::{
+        CredentialError, CredentialKey, CredentialStatus, CredentialStore,
+    };
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::time::{Duration, Instant};
+
+    /// 假钥匙串: `put` 阻塞 1s(置 `in_put` 供测试确认"IO 正在进行").
+    struct SlowPutStore {
+        in_put: Arc<AtomicBool>,
+        puts: AtomicUsize,
+    }
+
+    impl CredentialStore for SlowPutStore {
+        fn put(&self, _key: CredentialKey, _secret: &str) -> Result<(), CredentialError> {
+            self.puts.fetch_add(1, Ordering::SeqCst);
+            self.in_put.store(true, Ordering::SeqCst);
+            std::thread::sleep(Duration::from_secs(1));
+            Ok(())
+        }
+        fn get(&self, _key: CredentialKey) -> Result<Option<String>, CredentialError> {
+            Ok(None)
+        }
+        fn remove(&self, _key: CredentialKey) -> Result<(), CredentialError> {
+            Ok(())
+        }
+        fn available(&self) -> Result<(), CredentialError> {
+            Ok(())
+        }
+    }
+
+    fn temp_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("ncm-lock-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("临时目录");
+        dir
+    }
+
+    /// 打开一个 `Core` 并把凭据后端换成"put 睡 1s"的假实现.
+    fn open_core(tag: &str) -> (PathBuf, Arc<SlowPutStore>, Mutex<Core>) {
+        let dir = temp_dir(tag);
+        let core = Core::open(&dir).expect("Core 打开");
+        let slow = Arc::new(SlowPutStore {
+            in_put: Arc::new(AtomicBool::new(false)),
+            puts: AtomicUsize::new(0),
+        });
+        core.store.set_credential_backend(
+            Some(slow.clone()),
+            CredentialStatus::Secure {
+                backend: "slow-test",
+                migrated: false,
+            },
+        );
+        (dir, slow, Mutex::new(core))
+    }
+
+    /// 带 MUSIC_U 的会话: `IdentityStore::save` 会走 `creds.put(Session)`(即那条阻塞链).
+    fn logged_in_session(core: &Mutex<Core>) -> ncm_domain::Session {
+        let guard = lock_ignore_poison(core);
+        crate::identity::login_session(&guard.session, "MUSIC_U=u; __csrf=1")
+    }
+
+    /// 线程 A 走生产的两段式落盘([`persist_session`]), 其间线程 B 反复走只读路径;
+    /// B 每次**取锁**的等待必须远小于 A 的阻塞 IO(1s). 现状(持锁落盘)会等于 1s.
+    #[test]
+    fn slow_credential_put_does_not_block_readers() {
+        let (_dir, slow, core) = open_core("slow-put");
+        let session = logged_in_session(&core);
+        let in_put = slow.in_put.clone();
+
+        std::thread::scope(|scope| {
+            let writer = scope.spawn(|| {
+                let started = Instant::now();
+                persist_session(&core, session).expect("会话落盘");
+                started.elapsed()
+            });
+
+            // 先确认阻塞 IO 真的进来了(save 走了凭据后端), 再开始测读方等待
+            let wait_until = Instant::now() + Duration::from_secs(5);
+            while !in_put.load(Ordering::SeqCst) {
+                assert!(
+                    Instant::now() < wait_until,
+                    "put 没被调用: 会话落盘没走凭据后端, 这个用例就失去意义"
+                );
+                std::thread::yield_now();
+            }
+
+            // 采样窗口必须**包含第一次取锁**: 持锁落盘时那一次就会被阻塞 IO 拖住,
+            // 预热(skip 掉首次)会把回归掩盖掉(实测踩过).
+            let mut worst = Duration::ZERO;
+            let mut reads = 0usize;
+            let sample_until = Instant::now() + Duration::from_millis(250);
+            while Instant::now() < sample_until {
+                let t = Instant::now();
+                let guard = lock_ignore_poison(&core);
+                worst = worst.max(t.elapsed());
+                // 只读路径: 凭据状态 + 账号簿
+                let _ = guard.credential_status();
+                guard.accounts().expect("账号簿可读");
+                drop(guard);
+                reads += 1;
+            }
+
+            let blocking = writer.join().expect("写线程");
+            assert!(
+                blocking >= Duration::from_millis(900),
+                "假后端没真阻塞住, 用例无效: {blocking:?}"
+            );
+            assert!(
+                worst < Duration::from_millis(200),
+                "锁外落盘期间读方的取锁最坏等待 {worst:?} ≥ 200ms: \
+                 阻塞 IO 又回到 Core 锁内了"
+            );
+            assert!(reads > 10, "读方采样太少({reads} 次), 用例无效");
+        });
+    }
+
+    /// [`Core::commit_session`] 只改内存态: 不碰磁盘/钥匙串.
+    #[test]
+    fn commit_session_does_not_touch_disk() {
+        let (_dir, slow, core) = open_core("commit-only");
+        let next = logged_in_session(&core);
+        let before = lock_ignore_poison(&core).session.cookie.clone();
+        assert_ne!(before, next.cookie);
+
+        lock_ignore_poison(&core).commit_session(next.clone());
+
+        assert_eq!(lock_ignore_poison(&core).session.cookie, next.cookie);
+        assert_eq!(slow.puts.load(Ordering::SeqCst), 0, "commit 不该写凭据后端");
     }
 }
