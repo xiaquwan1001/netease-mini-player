@@ -4,11 +4,12 @@
 
 ## 架构(2026-11 重启后)
 
-- `core/` Rust workspace: `ncm-domain`(模型) / `ncm-provider`(Provider 抽象) / `ncm-service`(身份 + 网易云 provider) / `ncm-ffi`(Flutter 桥) / `ncm-cli`(headless 验证)。
+- `core/` Rust workspace: `ncm-domain`(模型) / `ncm-provider`(Provider 抽象) / `ncm-service`(身份 + 网易云 provider) / `ncm-playback`(播放状态机 + 桌面 rodio/CPAL 后端 + 响度/EQ) / `ncm-plugin`(QuickJS 音源插件宿主，实验性、**未接入产品**) / `ncm-ffi`(Flutter 桥) / `ncm-cli`(headless 验证)。
+- 播放层归属：**全部在 `core/crates/ncm-playback`**（状态机 + 平台后端；`ncm-ffi`/`ncm-cli` 只消费它，不自己开音频）—— 改播放行为先改该 crate。
 - `core/vendor/ncm-api`: api-enhanced 的 Rust 移植,**锁定 commit**(见 `vendor/UPSTREAM.txt`),协议/加解密/风控细节都在这里,不要自己重写加密。
 - `ui/` Flutter(android + linux + **windows** 一份 UI),桥接用 flutter_rust_bridge 2.13,由 `ui/rust_builder`(cargokit)在构建时编译 Rust。
   `ui/windows/**` 是 `flutter create` 产物,只有 `runner/main.cpp`(窗口标题/尺寸)与 `rust_builder/windows/CMakeLists.txt`(manifest 路径 + 库名 `ncm_ffi`)是手改过的,别整体重新生成。
-- 平台层: Android 用 Kotlin(Media3/MediaSession/登录 WebView),桌面(Linux/Windows)用 **rodio/CPAL**(纯 Rust + symphonia, 无系统依赖;Linux=ALSA、Windows=WASAPI,同一份代码两个 `cfg`)。
+- 平台层: Android 用 Kotlin(Media3/MediaSession/登录 WebView),桌面(Linux/Windows)用 **rodio/CPAL**(纯 Rust + symphonia, 无系统依赖;Linux=ALSA、Windows=WASAPI,同一份代码两个 `cfg`;代码在 `ncm-playback`)。
   MV 播放: Android 有独立 `MvPlayerActivity`(VideoView),桌面用系统播放器打开直链。早期设计写的 mpv + MPRIS **未实现**(见 `docs/archive/architecture-restart.md` §3 的现状注记),不要再按 mpv 规划。
 - `legacy/` 是 v1 的 WebView 实现,只读存档,不要再往里加功能。
 
@@ -26,7 +27,7 @@
 - 跨层只传 `ncm-domain` 里可序列化的类型;UI 不直接吃 `serde_json::Value`。
 - 任何 provider 的外部错误都转成 `ProviderError{kind,retryable,detail}`,UI 按 `kind` 决策。
 - 身份纪律:device_id 首启生成后**永久复用**;设备 cookie(`_ntes_nuid/_ntes_nnid/NMTID/WNMCID`)必须持久化,禁止每进程随机。
-- 用户操作设备(扫码/点应用);助手准备资产、给精确步骤、盯 `adb logcat`。
+- 扫码/点应用等**设备侧操作由用户执行 = 全局规则 5**；助手只备资产、给精确步骤、盯 `adb logcat`。
 - 第二份工作副本 `ncm-wt/ldata`（分支 `lane/data-profile`）**已不在盘**；重建就在该分支 checkout，**记忆唯一权威仍是本仓 `.pi/memory/`**（worktree 里的 `AGENTS.md` 随分支落后属正常）。
 - 项目记忆 `.pi/memory/`（`mem -t project` 自动搜；`history/` 被跳过）：`FAILURES.md` 失败教训｜`notes-build.md` 构建/工具链/CI/体积基线｜`notes-api.md` 登录/取链/歌词/评论协议｜`notes-ui-rules.md` UI 规则层｜`notes-credentials.md` 凭据存储决策｜`notes-wip.md` 在飞状态与门禁基线｜`media-notification-custom-buttons.md` Media3 通知/按钮槽位｜`USER.md` 项目专属口径｜`history/HINDSIGHT.md` 2026-10~11-04 历史 hindsight（存量事实，按需查）。项目技能 `.pi/skills/`。
   **`.pi/` 只在本地工作区, 已在 `.gitignore` 排除、不进公开仓库**(2026-11-10 起)。
@@ -35,5 +36,5 @@
 
 - 改 Rust API 固定三步：`flutter_rust_bridge_codegen generate --rust-input crate::api --rust-root core/crates/ncm-ffi --dart-output ui/lib/src/rust` → `cargo build -p ncm_ffi` → `flutter test`；漏第二步报 `Content hash on Dart side ... different from Rust side`。codegen 需 rustfmt。
 - 静态检查门固定 `cd ui && dart analyze`（`flutter analyze` 本机会偶发 SIGSEGV，别重试或重装 Flutter）；Rust 侧 `cargo clippy --workspace --all-targets` 必须 0 warning（2026-11-13 清零，别再引入）。`dart format` 用 Dart 3.13 tall style 会重排全仓（~10k 行 diff），**不要顺手跑**；要统一格式就单独立一次提交并同时加 CI 门。
-- **发布纪律（2026-11-15 用户口径）**：改完**总是推送到两个远端**（分支 + tag），**CI 与 Release 必须同时做**，不许「只跑 CI、release 不发」。版本号按工作量定：**≤5 个 bug 反馈只加最小号**（patch +1，如 0.12.2→0.12.3）；**≤15 个反馈、或含架构改动加 0.1**（minor，如 0.12.x→0.13.0）；**1.0 只在用户明确认可「可以真实发布」时才提**。流程：`tools/bump-version.sh` → 提交 `chore(release): vX.Y.Z` → `git-dual-push` → `git push origin vX && git push ustc vX` → **GitHub CI + Release 绿就发完**（2026-11-16 用户口径：USTC GitLab 无云 runner，此后不考虑其流水线；代码仍双推作镜像，但不再等/贴 GitLab pipeline 号）。
+- **发布纪律（2026-11-15 用户口径；双远端/CI 归属 = 全局 `rules/publish-ci.md`，本仓不复述）**：本仓增量 = **CI 与 Release 必须同时做**（不许只跑 CI 而不发 release）+ 版本号分级：**≤5 个 bug 反馈只加最小号**（patch +1，如 0.12.2→0.12.3）；**≤15 个反馈、或含架构改动加 0.1**（minor，如 0.12.x→0.13.0）；**1.0 只在用户明确认可「可以真实发布」时才提**。流程：`tools/bump-version.sh` → 提交 `chore(release): vX.Y.Z` → `git-dual-push`（分支 + tag）→ **GitHub CI + Release 绿就发完**（USTC 只作镜像，不等/不贴其 pipeline 号）。
 - UI 新代码固定入口：四态走 `AsyncView`；小组标题走 `SectionTitle`、区块标题走 `SectionHeader`；长文本/徽标走 `AdaptiveText`/`AdaptiveTextRow`；间距圆角字号只允许 `layout.dart` 与 `tools/check-tokens.sh` 的有限集合(例外写 `// token-ok: 理由`)。
