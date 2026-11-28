@@ -32,3 +32,14 @@ serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 futures = "0.3"
 thiserror = "2"
+
+# release 产物调优(2026-11-28 构建链审计 #4): 此前一个键都没有 ⇒ 默认 lto=false /
+# codegen-units=16, arm64 的 libncm_ffi.so 7.8MB。
+# - thin LTO + codegen-units=1: 跨 crate 内联, .so 预期小 10~20%(构建变慢, 只影响 release);
+# - strip = "debuginfo": 发布件不需要调试信息(崩溃栈靠 Dart/Rust 侧的 panic 信息);
+# - **不要** panic = "abort": FFI 侧有 catch_unwind 语义(ncm-ffi 的边界捕获),
+#   abort 会让一次 panic 直接杀进程。
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"
