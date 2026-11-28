@@ -10,7 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:minincm/main.dart' show MiniNcmApp;
-import 'package:minincm/src/app_shell.dart' show playerBarSlot;
+import 'package:minincm/src/app_shell.dart' show playerBarData, playerBarSlot;
 import 'package:minincm/src/platform_is.dart' show debugForceAndroid;
 import 'package:minincm/src/playback.dart';
 
@@ -32,6 +32,8 @@ void main() {
       if (call.method == 'state') {
         position += 500;
         return <String, Object?>{
+          // 有曲目才投播放条快照(否则 showBar=false, data 恒为 null)。
+          'trackId': 42,
           'playing': true,
           'positionMs': position,
           'durationMs': 200000,
@@ -61,15 +63,24 @@ void main() {
     expect(tester.takeException(), isNull);
 
     final before = tester.widget(find.byType(Scaffold).first);
+    final posBefore = playerBarData.value?.player.positionMs;
     // 再跨一次 500ms tick: 只有 positionMs 变化, 结构快照不变。
     await tester.pump(const Duration(milliseconds: 600));
     expect(tester.takeException(), isNull);
     final after = tester.widget(find.byType(Scaffold).first);
+    final posAfter = playerBarData.value?.player.positionMs;
 
     expect(
       identical(after, before),
       isTrue,
       reason: '纯位置 tick 不得重建整页(只有播放条快照该刷新)',
+    );
+    // 进度条数据必须照旧推进(否则就是把播放条改坏了)。
+    expect(posBefore, isNotNull);
+    expect(
+      posAfter! > posBefore!,
+      isTrue,
+      reason: '纯位置 tick 仍须刷新播放条快照, 进度不能停在上一帧',
     );
   });
 
