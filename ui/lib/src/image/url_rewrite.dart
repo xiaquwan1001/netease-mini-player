@@ -53,6 +53,24 @@ String neteaseSizedUrl(String url, {num? widthPx, num? heightPx}) {
   return '$url${sep}param=${pw}y$ph';
 }
 
+/// 降级链里的"次一档": 单边一半像素, 但不少于 60(与 [coverRequestPx] 的下限一致).
+/// 无效边长返回 null(交给 [neteaseThumbUrl]/[neteaseSizedUrl] 忽略)。
+num? _halfEdge(num? v) {
+  if (v == null || !v.isFinite || v <= 0) return null;
+  final half = v / 2;
+  return half < 60 ? 60 : half.round();
+}
+
+/// 方图降级链的次一档: 取两边里较大的那条减半([neteaseThumbUrl] 也是按 max 取方图).
+num? _halfPx(num? w, num? h) {
+  final dims = <num>[
+    if (w != null && w.isFinite && w > 0) w,
+    if (h != null && h.isFinite && h > 0) h,
+  ];
+  if (dims.isEmpty) return null;
+  return _halfEdge(dims.reduce((a, b) => a > b ? a : b));
+}
+
 /// 缩略图: 网易云 CDN 支持 `?param=NxN` 服务端裁剪.
 /// 列表里直接拉 1~2MB 原图会很慢(模拟器/移动网络尤其明显), 统一按显示尺寸取缩略图。
 String neteaseThumbUrl(String url, {num? width, num? height}) {
@@ -101,9 +119,13 @@ String neteaseThumbUrl(String url, {num? width, num? height}) {
 }
 
 /// 一张图的多级候选地址(按顺序尝试, 前一个失败就换下一个):
-/// 1. https + 缩略图  2. https 原图  3. http 原图
+/// 1. https + 缩略图  2. https + **次一档**缩略图(一半像素)  3. https 原图  4. http 原图
 /// 网易云 CDN 偶发对某个 host/尺寸回 403 或空 body(换尺寸/协议通常就好),
 /// 单 URL 只试一次会让整屏图片变占位符, 所以这里逐级降级。
+///
+/// 第 2 档是 2026-11-28 缓存审计 S2 补的: 以前首档 403 直接退到**原图**,
+/// 一张 1080 的缩略失败就可能整屏都在拉 1–2MB 的原图(流量与 RSS 双爆)。
+/// 先退一半像素(CDN 的另一档缓存, 通常仍然可命中)再考虑原图。
 List<String> imageCandidates(String? url, {num? width, num? height}) {
   final src = httpsImageUrl(url);
   if (src.isEmpty) return const [];
@@ -114,6 +136,9 @@ List<String> imageCandidates(String? url, {num? width, num? height}) {
   }
 
   add(neteaseThumbUrl(src, width: width, height: height));
+  // 次一档缩略(一半像素, 下限 60 与 coverRequestPx 一致): 403 时先降档再退原图
+  final half = _halfPx(width, height);
+  add(neteaseThumbUrl(src, width: half, height: half));
   add(src);
   add(raw);
   if (raw.startsWith('https://')) add(raw.replaceFirst('https://', 'http://'));
@@ -140,6 +165,14 @@ List<String> sizedImageCandidates(
   }
 
   add(neteaseSizedUrl(src, widthPx: widthPx, heightPx: heightPx));
+  // 次一档矩形缩略(与 [imageCandidates] 同一条降级纪律: 先降档, 原图最后)
+  add(
+    neteaseSizedUrl(
+      src,
+      widthPx: _halfEdge(widthPx),
+      heightPx: _halfEdge(heightPx),
+    ),
+  );
   add(src);
   add(raw);
   if (raw.startsWith('https://')) add(raw.replaceFirst('https://', 'http://'));

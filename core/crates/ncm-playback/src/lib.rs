@@ -568,6 +568,12 @@ mod backend {
         chain: biquad::EqChain,
         channel: usize,
         channels: usize,
+        /// EQ 关闭(链是纯旁路)时逐样本只做一个分支, 不碰 modulo/增益运算。
+        ///
+        /// R8(2026-11-28 Rust 审计): `is_passthrough()` 早就有了但没人用 ——
+        /// 默认设置下每个样本都在实时线程上白跑 `% channels` + 乘法 + clamp。
+        /// 构造时定一次, 播放中不再改(EQ 曲线变了要换源, 见 `Cmd::Configure`)。
+        bypass: bool,
     }
 
     impl<I> EqSource<I>
@@ -576,11 +582,13 @@ mod backend {
     {
         fn new(input: I, chain: biquad::EqChain) -> Self {
             let channels = input.channels().get() as usize;
+            let bypass = chain.is_passthrough();
             Self {
                 input,
                 chain,
                 channel: 0,
                 channels,
+                bypass,
             }
         }
     }
@@ -592,6 +600,10 @@ mod backend {
         type Item = Sample;
 
         fn next(&mut self) -> Option<Self::Item> {
+            if self.bypass {
+                // EQ 关闭: 样本原样透传(不轮转声道计数, 也就没有 modulo)
+                return self.input.next();
+            }
             let x = self.input.next()?;
             let y = self.chain.process_sample(self.channel, x);
             self.channel = (self.channel + 1) % self.channels.max(1);
@@ -2599,6 +2611,25 @@ mod backend {
                     );
                 }
             }
+        }
+
+        /// R8: EQ 关闭(空曲线/无 preamp)时 `EqSource` 必须走旁路 ——
+        /// 实时线程上不再逐样本 `% channels` + 增益 + clamp, 样本逐位原样透传。
+        #[test]
+        fn eq_source_bypasses_when_chain_is_passthrough() {
+            let empty = ncm_domain::EqProfile::default();
+            let chain = biquad::EqChain::new(&empty, 8_000.0, 2);
+            let mut src = EqSource::new(const_source(4), chain);
+            assert!(src.bypass, "空曲线必须走旁路");
+            let got: Vec<Sample> = src.by_ref().take(4).collect();
+            assert_eq!(got, vec![1.0, 1.0, 1.0, 1.0]);
+
+            // 有 preamp 就不再是旁路(必须逐样本处理)
+            let shaped = ncm_domain::EqProfile::parse("Preamp: -6 dB\n").unwrap();
+            let chain = biquad::EqChain::new(&shaped, 8_000.0, 1);
+            let mut src = EqSource::new(const_source(2), chain);
+            assert!(!src.bypass, "有增益的曲线不能旁路");
+            assert!(src.next().unwrap() < 0.9, "preamp 必须真的作用在样本上");
         }
 
         /// 用户设置的淡入真正生效的地方是**暂停恢复**: 斜坡包络由 [`ramp_scale`] 给出,

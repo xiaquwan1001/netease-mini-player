@@ -515,7 +515,13 @@ class MainActivity : FlutterActivity() {
             } else if (svc == null) {
                 result.error("not_ready", "PlaybackService 尚未创建", null)
             } else {
-                result.success(svc.cachedFileFor(url))
+                // SimpleCache 的 getCachedSpans/file 会摸 DB 并可能等文件锁; 响度补测每 20s
+                // 调一次, 放主线程就是定期抖一下(2026-11-28 平台审计). 挪到 IO 线程,
+                // 结论再回主线程给 channel.
+                ioExecutor.execute {
+                    val path = svc.cachedFileFor(url)
+                    runOnUiThread { result.success(path) }
+                }
             }
             return
         }

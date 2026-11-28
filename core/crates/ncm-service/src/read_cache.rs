@@ -22,7 +22,7 @@
 //! ## 语义
 //!
 //! - TTL 默认 [`DEFAULT_TTL`](300s): 搜索/详情这类数据变化慢, 5 分钟内复用足够。
-//! - 容量 [`DEFAULT_CAPACITY`](200 条) + **字节上限** [`DEFAULT_MAX_BYTES`](24MB),
+//! - 容量 [`DEFAULT_CAPACITY`](400 条) + **字节上限** [`DEFAULT_MAX_BYTES`](24MB),
 //!   满了按最近最少使用淘汰; 单条超过 [`DEFAULT_MAX_ENTRY_BYTES`](4MB) 的不入池。
 //! - body 以 `Arc<Value>` 存放与返回: 命中只 `Arc::clone`, 不深拷贝(审计 R1)。
 //! - 只缓存**成功**的结果; 错误(尤其是 405/风控)不缓存, 免得把瞬时故障钉住。
@@ -43,12 +43,17 @@ use ncm_provider::{ProviderError, ProviderResult};
 
 /// 默认 TTL: 300s。
 pub const DEFAULT_TTL: Duration = Duration::from_secs(300);
-/// 默认容量: 200 条(key 数)。
-pub const DEFAULT_CAPACITY: usize = 200;
+/// 默认容量: 400 条(key 数)。
+///
+/// 2026-11-28(缓存审计 S1): 一次搜索爆发会占 6–120 个 key(cloudsearch 六类 +
+/// 最长匹配回退 + 热词/联想), 白名单扩容到 31 个端点后 200 条更容易被挤满, 从而把
+/// 歌词/歌单详情这类**真正反复命中**的条目淘汰掉。真正的兜底仍是字节上限
+/// ([`DEFAULT_MAX_BYTES`], 24MB): 条数只决定"能装几条小 body", 不会让常驻内存失控。
+pub const DEFAULT_CAPACITY: usize = 400;
 /// 默认**字节**上限: 24MB。
 ///
 /// 只按条数限容在"body 大小差三个数量级"时失控: 搜索结果是几 KB, 而 1000 首歌单
-/// (`playlist_track_all` / `liked` 的 `s=8` detail) 的 body 是 1–3MB, 200 条上界
+/// (`playlist_track_all` / `liked` 的 `s=8` detail) 的 body 是 1–3MB, 400 条上界
 /// 就是数百 MB(2026-11-28 Rust 审计 R1)。
 pub const DEFAULT_MAX_BYTES: usize = 24 << 20;
 /// 单条上限: 4MB。超过就不入缓存(宁可每次重取, 也不让一条大 body 把整池挤空)。
@@ -1009,5 +1014,35 @@ mod tests {
             cache.lock().inflight.is_empty(),
             "创建者取消仍要摘表(不会留死条目)"
         );
+    }
+
+    /// S1(2026-11-28 缓存审计): 一次搜索爆发(<=120 个 key)不能把歌词挤出去。
+    ///
+    /// 这里直接盯住"容量 + LRU 顺序"这两件事: 先放一条歌词, 再灌 120 个搜索 key,
+    /// 歌词必须还在(它是播放页/滚动会反复命中的那一条, 被挤掉 = 每句歌词都重打上游)。
+    #[tokio::test]
+    async fn search_burst_does_not_evict_lyric_entry() {
+        let cache = ReadCache::default();
+        let lyric_key = cache_key(endpoint::LYRIC, &[("id", "1".into())]);
+        cache
+            .get_or_load(endpoint::LYRIC, &lyric_key, || async {
+                Ok(serde_json::json!({"code": 200, "lrc": {"lyric": "[00:00]hi"}}))
+            })
+            .await
+            .unwrap();
+        for i in 0..120 {
+            let key = cache_key(endpoint::CLOUDSEARCH, &[("keywords", format!("k{i}"))]);
+            cache
+                .get_or_load(endpoint::CLOUDSEARCH, &key, || async {
+                    Ok(serde_json::json!({"code": 200, "result": {}}))
+                })
+                .await
+                .unwrap();
+        }
+        assert!(
+            cache.get(&lyric_key).is_some(),
+            "120 个搜索 key 之后歌词还在(容量 {DEFAULT_CAPACITY})"
+        );
+        assert_eq!(cache.len(), 121);
     }
 }

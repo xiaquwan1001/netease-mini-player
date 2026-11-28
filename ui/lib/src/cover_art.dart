@@ -172,8 +172,16 @@ class _FallbackImageState extends State<_FallbackImage> {
   /// - `_resolved`: 这组候选里哪个 url 确认能出图(重建时直接用它, 不再从头试错)
   /// - `_dead`: 确认拿不到的 url(403/空 body), 之后直接跳过, 免得每次都重试一遍
   ///   从而在占位符和图片之间来回闪
-  static final Map<String, String> _resolved = <String, String>{};
-  static final Set<String> _dead = <String>{};
+  ///
+  /// 都**有上限**(2026-11-28 缓存审计 P2-9): 以前 `_resolved` 是个裸 Map,
+  /// 浏览几千张封面后只增不减; `_dead` 只在超过 512 时整体清空(会把还活着的信息一起丢)。
+  /// 现在统一走 [LruMap]: 按最久未用淘汰, 内存随浏览规模收敛。
+  static final LruMap<String, String> _resolved = LruMap<String, String>(
+    maxEntries: 512,
+  );
+  static final LruMap<String, String> _dead = LruMap<String, String>(
+    maxEntries: 512,
+  );
 
   static String _cacheKey(List<String> candidates) => candidates.join('\u0000');
 
@@ -191,11 +199,14 @@ class _FallbackImageState extends State<_FallbackImage> {
     final all = widget.candidates;
     final known = _resolved[_cacheKey(all)];
     final knownIdx = known == null ? -1 : all.indexOf(known);
-    if (knownIdx >= 0 && knownIdx >= _index && !_dead.contains(known)) {
+    if (known != null &&
+        knownIdx >= 0 &&
+        knownIdx >= _index &&
+        _dead[known] == null) {
       return knownIdx;
     }
     for (var i = _index; i < all.length; i++) {
-      if (!_dead.contains(all[i])) return i;
+      if (_dead[all[i]] == null) return i;
     }
     return null;
   }
@@ -203,13 +214,12 @@ class _FallbackImageState extends State<_FallbackImage> {
   void _markOk(String url) {
     final key = _cacheKey(widget.candidates);
     if (_resolved[key] == url) return;
-    _resolved[key] = url;
+    _resolved.put(key, url);
   }
 
   /// 这个 url 拿不到: 拉黑 + 忘掉"它上次成功过", 然后试下一个
   void _markDead(String url, int idx) {
-    if (_dead.length > 512) _dead.clear();
-    _dead.add(url);
+    _dead.put(url, url);
     final key = _cacheKey(widget.candidates);
     if (_resolved[key] == url) _resolved.remove(key);
     _nextFrom(idx);

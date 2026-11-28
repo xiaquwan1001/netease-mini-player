@@ -311,10 +311,42 @@ void forgetLoudnessGain({int? trackId}) {
   }
 }
 
+/// 上限收敛的最小间隔(P2-9, 2026-11-28 缓存审计)。
+///
+/// `cache_enforce_limit` 在 Rust 侧是**全目录 walk + stat**(几百个文件), 而桌面每次切歌
+/// 都会调一次 —— 连播/跳歌时这是纯浪费 IO。10 分钟内重复调用直接跳过: 跳过只会让
+/// 淘汰晚一点发生, 不会让缓存超限失控(真正的兜底仍是上限本身)。
+const Duration kCacheEnforceInterval = Duration(minutes: 10);
+
+DateTime? _lastCacheEnforceAt;
+int _cacheEnforceRuns = 0;
+
+/// 测试用: 清空节流状态与计数。
+@visibleForTesting
+void debugResetCacheEnforceThrottle() {
+  _lastCacheEnforceAt = null;
+  _cacheEnforceRuns = 0;
+}
+
+/// 测试用: 真正去扫描了几次(节流命中时不自增)。
+@visibleForTesting
+int debugCacheEnforceRuns() => _cacheEnforceRuns;
+
 /// 按设置里的上限收敛音频缓存(R5)。[keepTrackId] = 正在播放的曲目, 永不删除。
-Future<void> enforceCacheLimit({int? keepTrackId}) async {
+///
+/// [force] = 用户在设置页显式点"立即清理"这类动作, 不受节流限制。
+Future<void> enforceCacheLimit({int? keepTrackId, bool force = false}) async {
   final settings = AppSettings.instance;
   if (settings.cacheLimitMb <= 0) return;
+  if (!force) {
+    final last = _lastCacheEnforceAt;
+    if (last != null &&
+        DateTime.now().difference(last) < kCacheEnforceInterval) {
+      return;
+    }
+  }
+  _lastCacheEnforceAt = DateTime.now();
+  _cacheEnforceRuns++;
   try {
     // Android 用 Media3 的 SimpleCache + LeastRecentlyUsedCacheEvictor 自己收敛上限,
     // 这里不重复调用(两边缓存目录是隔离的, 见 PlaybackService 注释)

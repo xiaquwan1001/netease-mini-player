@@ -101,4 +101,28 @@ void main() {
       expect(AudioTuningRequest.fromSettings(settings).fadeMs, ms);
     }
   });
+
+  // P2-9(2026-11-28 缓存审计): 上限收敛要节流 —— Rust 侧是全目录 walk+stat,
+  // 桌面每次切歌都调一次就是白烧 IO; 10 分钟内重复调用跳过, 用户显式动作(force)例外。
+  test('enforceCacheLimit 10 分钟内只真跑一次, force 例外', () async {
+    debugResetCacheEnforceThrottle();
+    // 上限为 0 = 关闭缓存上限, 直接返回(不计数)
+    settings.cacheLimitMb = 0;
+    await enforceCacheLimit();
+    expect(debugCacheEnforceRuns(), 0, reason: '上限关闭时不该去扫目录');
+
+    settings.cacheLimitMb = 1024;
+    await enforceCacheLimit(keepTrackId: 1);
+    expect(debugCacheEnforceRuns(), 1);
+    await enforceCacheLimit(keepTrackId: 2);
+    await enforceCacheLimit(keepTrackId: 3);
+    expect(debugCacheEnforceRuns(), 1, reason: '10 分钟内的后续切歌应被节流');
+
+    await enforceCacheLimit(force: true);
+    expect(debugCacheEnforceRuns(), 2, reason: 'force(启动/改上限)必须穿透节流');
+
+    debugResetCacheEnforceThrottle();
+    expect(debugCacheEnforceRuns(), 0);
+    settings.cacheLimitMb = 512;
+  });
 }

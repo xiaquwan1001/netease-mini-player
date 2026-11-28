@@ -115,7 +115,8 @@ class HomeStartup {
       unawaited(promptWhatsNew());
       // 启动时把已保存的播放参数与缓存上限应用一次(默认值 = 不改变现状)
       unawaited(applyAudioTuning());
-      unawaited(enforceCacheLimit());
+      // 启动这一次不受节流限制(每个进程只跑一次, 越早收敛越好)
+      unawaited(enforceCacheLimit(force: true));
       if (!isMounted()) return;
       setInfo(info);
       publishActionsHost(contextOf(), buildActionsHost());
@@ -275,8 +276,12 @@ class HomeStartup {
     }
     if (settings.cacheLimitMb != _lastCacheLimitMb) {
       _lastCacheLimitMb = settings.cacheLimitMb;
+      // 用户改了上限 ⇒ 立刻按新上限收敛, 不被节流挡掉
       unawaited(
-        enforceCacheLimit(keepTrackId: coordinator.player?.trackId?.toInt()),
+        enforceCacheLimit(
+          keepTrackId: coordinator.player?.trackId?.toInt(),
+          force: true,
+        ),
       );
     }
   }

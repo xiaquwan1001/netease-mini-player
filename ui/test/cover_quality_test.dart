@@ -98,6 +98,28 @@ void main() {
     });
   });
 
+  // S2(2026-11-28 缓存审计): 首档缩略失败时先退"次一档缩略", 而不是直接拉原图 ——
+  // 否则一张 1080 的缩略被 CDN 403, 整屏就开始拉 1–2MB 的原图。
+  test('S2: 降级链先降档再退原图', () {
+    const url = 'https://p1.music.126.net/a/b.jpg';
+    final square = imageCandidates(url, width: 400, height: 400);
+    expect(square[0], '$url?param=400y400');
+    expect(square[1], '$url?param=200y200', reason: '第二档应为次一档缩略');
+    expect(square[2], url, reason: '原图必须排在两档缩略之后');
+
+    final rect = sizedImageCandidates(url, widthPx: 1000, heightPx: 500);
+    expect(rect[0], '$url?param=1000y500');
+    expect(rect[1], '$url?param=500y250', reason: '矩形链的次一档要保持宽高比');
+    expect(rect[2], url);
+
+    // 没有有效边长时不会多出"降档"候选(全宽图片走这条):
+    // 只剩 https 原图 + http 原图两级协议降级
+    expect(imageCandidates(url), <String>[
+      url,
+      'http://p1.music.126.net/a/b.jpg',
+    ]);
+  });
+
   group('CoverArt 组件级: 真正请求的 URL 像素', () {
     Future<String?> renderedUrl(WidgetTester tester, double dpr) async {
       await tester.pumpWidget(

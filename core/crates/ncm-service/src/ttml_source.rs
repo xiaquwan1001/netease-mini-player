@@ -304,6 +304,29 @@ impl TtmlDoc {
     }
 }
 
+/// TTML 磁盘缓存条目上限(`.ttml` 原文与 `.none` 标记都算一条)。
+///
+/// P2-8(2026-11-28 缓存审计): 以前这个目录**完全没有上限** —— 逐字歌词是"播过就写",
+/// 一天几百首就是几百个文件, 长期只增不减。上限按**条数**而不是字节: 单条 TTML 几 KB
+/// 到几十 KB, 2000 条 ≈ 数十 MB 量级, 对桌面/手机都可接受, 而实现不需要反复 stat 求和。
+pub const TTML_CACHE_MAX_FILES: usize = 2_000;
+
+/// `.none`(「这首没有 TTML」)标记的有效期。
+///
+/// P2-8: 标记以前是**永久**的 —— 曲库后来补了逐字歌词, 这台机器也永远不会再问。
+/// 30 天是"宁可偶尔白问一次公益 API, 也不让数据永久陈旧"的折中(同一曲目一天最多多 0 次,
+/// 因为过期后若仍然没有数据会重新写一份新标记)。
+pub const NONE_MARKER_TTL: std::time::Duration = std::time::Duration::from_secs(30 * 24 * 3600);
+
+/// `.none` 标记是否仍然有效(= 还不到重问 API 的时候)。
+fn none_marker_fresh(meta: &std::fs::Metadata) -> bool {
+    !meta
+        .modified()
+        .ok()
+        .and_then(|m| m.elapsed().ok())
+        .is_some_and(|age| age > NONE_MARKER_TTL)
+}
+
 /// ttml 缓存目录.
 fn ttml_dir(data_dir: &Path) -> PathBuf {
     data_dir.join("ttml")
@@ -380,11 +403,13 @@ pub async fn fetch_ttml(data_dir: &Path, ncm_music_id: u64) -> Result<Option<Ttm
             }
         };
     }
-    if tokio::fs::metadata(ttml_none_path(data_dir, ncm_music_id))
-        .await
-        .is_ok()
-    {
-        return Ok(None); // 已知无数据, 不再打 API
+    // `.none` 标记有 TTL(P2-8): 曲库是会补数据的, 永久否定等于"这首歌永远没有逐字歌词".
+    if let Ok(meta) = tokio::fs::metadata(ttml_none_path(data_dir, ncm_music_id)).await {
+        if none_marker_fresh(&meta) {
+            return Ok(None); // 已知无数据, 不再打 API
+        }
+        // 过期: 删标记重新探测(删不掉也无所谓, 下面的写入会覆盖它)
+        let _ = tokio::fs::remove_file(ttml_none_path(data_dir, ncm_music_id)).await;
     }
 
     let url = format!("{AMLL_API_BASE}?ncmMusicId={ncm_music_id}");
@@ -424,13 +449,65 @@ pub async fn fetch_ttml(data_dir: &Path, ncm_music_id: u64) -> Result<Option<Ttm
     let name = format!("{ncm_music_id}.ttml");
     let dir = ttml_dir(data_dir);
     let bytes = ttml_text.as_bytes().to_vec();
-    if let Err(e) =
-        tokio::task::spawn_blocking(move || crate::fsutil::write_atomic(&dir, &name, &bytes)).await
+    if let Err(e) = tokio::task::spawn_blocking(move || {
+        let r = crate::fsutil::write_atomic(&dir, &name, &bytes);
+        // 写成功后顺手裁剪(P2-8: 目录以前只增不减). 失败安静: 下次播放再裁.
+        if r.is_ok() {
+            prune_ttml_cache(&dir, TTML_CACHE_MAX_FILES);
+        }
+        r
+    })
+    .await
     {
         // 阻塞池 JoinError(线程 panic): 与写失败同等对待 —— 下次播放重抓
         eprintln!("[ttml] 缓存落盘任务异常: {e}");
     }
     Ok(Some(doc))
+}
+
+/// 裁剪 TTML 缓存目录: 条目超过 `max` 时按 **mtime 从旧到新** 删到 `max * 9 / 10`。
+///
+/// 返回删掉的条数。尽力而为: 读目录失败/删失败都不上抛(缓存清理不该让播放页报错)。
+///
+/// 为什么按 mtime 而不是文件名: 曲目 id 与"最近听过"没有关系; "最久没播放过"才是
+/// 该走的那个。`max * 9 / 10` 是给批量删除留出余量 —— 每写一条就跑一次目录遍历,
+/// 若每次只删到刚好 `max`, 下一秒又超, 就变成每条都全目录扫描。
+fn prune_ttml_cache(dir: &Path, max: usize) -> usize {
+    if max == 0 {
+        return 0;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    let mut items: Vec<(std::time::SystemTime, PathBuf)> = entries
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let path = e.path();
+            let name = path.file_name()?.to_str()?.to_string();
+            if !(name.ends_with(".ttml") || name.ends_with(".none")) {
+                return None;
+            }
+            let mtime = e
+                .metadata()
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .unwrap_or(std::time::UNIX_EPOCH);
+            Some((mtime, path))
+        })
+        .collect();
+    if items.len() <= max {
+        return 0;
+    }
+    items.sort_by_key(|(mtime, _)| *mtime);
+    let keep = max * 9 / 10;
+    let excess = items.len().saturating_sub(keep);
+    let mut removed = 0usize;
+    for (_, path) in items.into_iter().take(excess) {
+        if std::fs::remove_file(&path).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
 }
 
 /// reqwest 报错信息只有一句 "error sending request", 真正原因在 source 链里.
@@ -1151,5 +1228,69 @@ mod tests {
         assert_eq!(LyricSource::Yrc.as_str(), "yrc");
         assert_eq!(LyricSource::Ttml.as_str(), "ttml");
         assert_eq!(LyricSource::LineLevel.as_str(), "line");
+    }
+
+    /// P2-8: TTML 目录超过上限时按 mtime 删旧的, 且留 10% 余量(不要每条都全目录扫描)。
+    #[test]
+    fn ttml_cache_prunes_oldest_files_over_the_limit() {
+        let dir = tmpdir("prune");
+        std::fs::create_dir_all(&dir).unwrap();
+        // 10 条: 前 6 条"很旧", 后 4 条"很新"(含一条 .none 标记)
+        for i in 0..10u64 {
+            let name = if i % 5 == 4 {
+                format!("{i}.none")
+            } else {
+                format!("{i}.ttml")
+            };
+            let path = dir.join(&name);
+            std::fs::write(&path, "x").unwrap();
+            let when = std::time::UNIX_EPOCH + std::time::Duration::from_secs(i * 60);
+            let f = std::fs::OpenOptions::new().write(true).open(&path).unwrap();
+            f.set_times(
+                std::fs::FileTimes::new()
+                    .set_accessed(when)
+                    .set_modified(when),
+            )
+            .unwrap();
+        }
+        let removed = prune_ttml_cache(&dir, 5);
+        // 5 条上限, 收工后留 5*9/10 = 4 条 ⇒ 删掉 6 条
+        assert_eq!(removed, 6, "应删到上限的 90%");
+        let left: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .collect();
+        assert_eq!(left.len(), 4);
+        for old in ["0.ttml", "1.ttml", "2.ttml", "3.ttml", "4.none", "5.ttml"] {
+            assert!(!left.iter().any(|n| n == old), "{old} 是最旧的, 应该被删掉");
+        }
+        for keep in ["6.ttml", "7.ttml", "8.ttml", "9.none"] {
+            assert!(left.iter().any(|n| n == keep), "{keep} 是最新的, 必须留着");
+        }
+        // 没超上限时不动
+        assert_eq!(prune_ttml_cache(&dir, 10), 0);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// P2-8 的另一半: `.none` 标记有 30 天 TTL —— 曲库补了逐字歌词后能重新探测到。
+    #[test]
+    fn none_marker_expires_after_ttl() {
+        let dir = tmpdir("none-ttl");
+        let p = dir.join("42.none");
+        std::fs::write(&p, "").unwrap();
+        assert!(
+            none_marker_fresh(&std::fs::metadata(&p).unwrap()),
+            "刚写的标记必须有效(不再打 API)"
+        );
+        let old = std::time::SystemTime::now() - NONE_MARKER_TTL - std::time::Duration::from_secs(3600);
+        let f = std::fs::OpenOptions::new().write(true).open(&p).unwrap();
+        f.set_times(std::fs::FileTimes::new().set_modified(old))
+            .unwrap();
+        assert!(
+            !none_marker_fresh(&std::fs::metadata(&p).unwrap()),
+            "超过 30 天的标记必须过期, 允许重新探测"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
