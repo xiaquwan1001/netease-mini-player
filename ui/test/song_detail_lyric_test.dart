@@ -223,4 +223,21 @@ void main() {
       expect(activeText.center.dx, closeTo(idleText.center.dx, 1.0));
     });
   });
+  group('歌词列表底部让出右下角竖排按钮(2026-11-28 审计 1.5)', () {
+    test('有翻译键 = 48+8+48 两个按钮, 无翻译只有定位键', () {
+      // 那一列是 Positioned(right: 8, bottom: 8) 的 filledTonal(命中带 48),
+      // 列表底部不留出这块, 滚到最底时最后一句右端会落在按钮下面。
+      expect(
+        lyricViewPadding(hasTranslation: true, top: 8, horizontal: 24).bottom,
+        112,
+      );
+      expect(
+        lyricViewPadding(hasTranslation: false, top: 24, horizontal: 20).bottom,
+        56,
+      );
+      // 只动底部: 其余三边原样透传(不改既有观感)
+      final p = lyricViewPadding(hasTranslation: true, top: 24, horizontal: 20);
+      expect([p.top, p.left, p.right], [24, 20, 20]);
+    });
+  });
 }

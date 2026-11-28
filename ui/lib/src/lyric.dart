@@ -247,6 +247,24 @@ class PlainLyricView extends StatelessWidget {
   }
 }
 
+/// 歌词列表的内边距: 普通留白 + **底部让出详情页右下角竖排按钮**的位置。
+///
+/// 详情页(歌词面)右下角固定叠着一列 `IconButton.filledTonal`(翻译开关 / 定位当前
+/// 歌词): 有翻译时 48 + 8 + 48 = 104dp, 没有翻译时 48dp, `right/bottom` 各 8。
+/// 歌词列表底部不留出这块, 滚到最底时**最后一句的右端会落在按钮下面**(审计
+/// 2026-11-28 1.5)。只在末尾多留白, 滚动中间看不出来。
+///
+/// 参数 [top]/[horizontal] 由调用视图按自己的默认留白传(纯文本 24/20, 行级与
+/// 逐字 8/24), 这样只改底部, 不改既有观感。
+EdgeInsets lyricViewPadding({
+  required bool hasTranslation,
+  required double top,
+  required double horizontal,
+}) {
+  final bottom = 8.0 + (hasTranslation ? 56.0 : 0.0) + 48.0;
+  return EdgeInsets.fromLTRB(horizontal, top, horizontal, bottom);
+}
+
 /// 行级歌词字号: 静态行与当前行**几乎同号**(只 +1sp), 与逐字视图
 /// (`word_lyric_view.dart` 的 `karaokeFontSize` 口径一致)。
 ///

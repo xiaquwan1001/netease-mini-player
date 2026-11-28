@@ -1053,9 +1053,18 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
       if (_lyric.visible)
-        // 背景色由当前曲目封面取色, 无彩/取色失败时完全透明直通主题
+        // 背景色由当前曲目封面取色, 无彩/取色失败时完全透明直通主题。
+        // 展开时淡入 180ms(审计 2026-11-28 4.3): 旧实现与 AppBar 同时硬出现,
+        // 第一帧整页"哺"一下。Tween 两端是常量 ⇒ 父层每帧重建(ticker)不会重放,
+        // 只有"重新插入"(收起再展开)才会从头跑。
         Positioned.fill(
-          child: CoverBackdrop(palette: _coverPalette, child: _buildLyrics()),
+          child: TweenAnimationBuilder<double>(
+            tween: Tween<double>(begin: 0, end: 1),
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            builder: (context, t, child) => Opacity(opacity: t, child: child),
+            child: CoverBackdrop(palette: _coverPalette, child: _buildLyrics()),
+          ),
         ),
       // 输入联想盖在 tab 内容之上并**占满剩余高度**(需求 14):
       // 以前它是一条 maxHeight 280 的窄条, 联想多了只能在小矩形里滚,

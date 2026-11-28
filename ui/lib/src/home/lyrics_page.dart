@@ -163,6 +163,15 @@ class HomeLyricsPage {
     );
   }
 
+  /// 歌词列表内边距 = 视图自己的默认留白 + 底部让出右下角竖排两钮
+  /// (口径与算式都在 `lyric.dart` 的 [lyricViewPadding])。
+  EdgeInsets _lyricPadding({required double top, required double horizontal}) =>
+      lyricViewPadding(
+        hasTranslation: lyric.hasTranslation,
+        top: top,
+        horizontal: horizontal,
+      );
+
   /// 歌曲详情页正文 = 歌词 + (定位当前句 / 底部次要控制)
   Widget buildBody(BuildContext context) {
     // 多选态: 点行 = 加/减选; 非多选态点击不做事(避免误改焦点)
@@ -183,6 +192,8 @@ class HomeLyricsPage {
         onLineTap: onTap,
         onLineLongPress: onLong,
         autoScroll: lyric.autoFollow,
+        // 底部让出右下角那两个竖排圆钮(见 [_lyricPadding])
+        padding: _lyricPadding(top: 8, horizontal: 24),
       );
     } else if (lyric.plain != null) {
       body = PlainLyricView(
@@ -191,6 +202,7 @@ class HomeLyricsPage {
         selected: lyric.selected,
         onLineTap: onTap,
         onLineLongPress: onLong,
+        padding: _lyricPadding(top: 24, horizontal: 20),
       );
     } else if (lyric.error != null) {
       // 错误态要给出路: 只给一行错误文本时, 同一首只能切歌才可能恢复。
@@ -215,6 +227,7 @@ class HomeLyricsPage {
         onLineLongPress: onLong,
         // 超长当前行只在播放中横向滚动(与逐字歌词同一口径)
         playing: lyric.playing,
+        padding: _lyricPadding(top: 8, horizontal: 24),
       );
     }
 

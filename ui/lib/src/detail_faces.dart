@@ -14,6 +14,7 @@ import 'cover_art.dart'
         showImageViewer;
 import 'format.dart' show formatDurationShort;
 import 'image_io.dart';
+import 'lru.dart';
 import 'net_retry.dart' show describeError;
 import 'state_views.dart' show LoadingView;
 import 'toast.dart';
@@ -152,7 +153,7 @@ const double _kCoverMinSide = 120;
 /// 动作行内容的**最小宽度**: 三个 `IconButton.filledTonal` 各 48 + 两个 8 间隔
 /// = 160dp(进度文案靠 `Expanded` 自己省略)。
 ///
-/// 行的宽度默汈跟图同宽(共线), 但图窄到这个值以下时不能把行硬塞进图宽
+/// 行的宽度默认跟图同宽(共线), 但图窄到这个值以下时不能把行硬塞进图宽
 /// (2026-11-28 审计 P1: `side ∈ [120,160)` 会水平溢出) —— 此时行取本值,
 /// 代价是行比图宽一点, 但按钮不会报 RenderFlex overflow。
 const double _kCoverActionMinWidth = 160;
@@ -164,6 +165,21 @@ const double _kThumbLogicalSize = 40;
 
 /// 大图淡入时长(小图已在位, 只是把清晰的大图叠上来)
 const Duration _kBigFade = Duration(milliseconds: 220);
+
+/// 歌词面 ⇄ 封面面的交叉淡入时长。
+///
+/// 旧实现是硬切(`if (_face == cover)` 条件插入): 整块文字瞬变成整块图, 在
+/// 300dp 屏上观感就是"跳"(审计 2026-11-28 4.1)。现在两面**同时在场** 200ms
+/// 交叉淡: 歌词淡出、封面淡入, 面本身仍然互斥(动画结束后照旧 Offstage)。
+const Duration _kFaceFade = Duration(milliseconds: 200);
+
+/// 已经淡入过的大图键(会话级, 跨 State 存活)。
+///
+/// 防的是这个坑: 歌词页在 `home_page` 里是 `if (_lyric.visible)` **条件插入**的,
+/// 每次展开都新建 State。旧实现把"已淡过"标记放在 State 里(`_bigFaded`),
+/// 于是每次展开同一首歌都要再淡一次大图。现在按 `trackId|coverUrl` 记账, 上限
+/// 64 首(远大于一屏可见历史), 不做无界增长。
+final LruMap<String, bool> _bigFadedKeys = LruMap<String, bool>(maxEntries: 64);
 
 /// 封面面左下角的进度文案: `当前 / 总时长`(如 `1:23 / 4:56`)。
 ///
@@ -181,9 +197,19 @@ String _progressText(int positionMs, int durationMs) {
 String _progressClock(int ms) =>
     ms > 0 ? formatDurationShort(BigInt.from(ms)) : '0:00';
 
-class _DetailFacesState extends State<DetailFaces> {
+class _DetailFacesState extends State<DetailFaces>
+    with SingleTickerProviderStateMixin {
   late DetailFace _face = widget.faceController?.value ?? widget.initialFace;
   bool _saving = false;
+
+  /// 面的交叉淡入进度: 0 = 只看得见歌词面, 1 = 只看得见封面面。
+  ///
+  /// 初始值跟着 [DetailFaces.initialFace] 走 —— 直入封面面时不能先闪一下歌词。
+  late final AnimationController _fade = AnimationController(
+    vsync: this,
+    duration: _kFaceFade,
+    value: _face == DetailFace.cover ? 1 : 0,
+  );
 
   /// 大图字节缓存, 键 = `trackId|coverUrl`。
   ///
@@ -194,8 +220,8 @@ class _DetailFacesState extends State<DetailFaces> {
   String? _bigKey;
   int _bigToken = 0;
 
-  /// 大图淡入跑过一次就不再重放(切面回来瞬间就是清晰大图, 不再抖一下)
-  bool _bigFaded = false;
+  /// 大图淡入跑过一次就不再重放(切面回来/重新展开瞬间就是清晰大图)
+  bool get _bigFaded => _bigFadedKeys[_bigCacheKey] == true;
 
   @override
   void initState() {
@@ -207,6 +233,7 @@ class _DetailFacesState extends State<DetailFaces> {
   @override
   void dispose() {
     widget.faceController?.removeListener(_onFaceRequested);
+    _fade.dispose();
     super.dispose();
   }
 
@@ -226,7 +253,6 @@ class _DetailFacesState extends State<DetailFaces> {
       _bigToken++;
       _bigBytes = null;
       _bigKey = null;
-      _bigFaded = false;
       if (_face == DetailFace.cover) _ensureBig();
     }
   }
@@ -237,10 +263,7 @@ class _DetailFacesState extends State<DetailFaces> {
   void _onFaceRequested() {
     final want = widget.faceController?.value;
     if (want == null || want == _face) return;
-    setState(() {
-      _face = want;
-      if (want == DetailFace.cover) _ensureBig();
-    });
+    _applyFace(want);
   }
 
   void _toggleFace() {
@@ -251,13 +274,23 @@ class _DetailFacesState extends State<DetailFaces> {
   /// 切面的唯一出口: 改本地面 → 通知页面(写回偏好) → 同步控制器
   void _setFace(DetailFace next) {
     if (next == _face) return;
+    _applyFace(next);
+    widget.onFaceChanged?.call(next);
+    final controller = widget.faceController;
+    if (controller != null && controller.value != next) controller.value = next;
+  }
+
+  /// 真正改面 + 启动交叉淡入(两条入口 [_onFaceRequested] / [_setFace] 共用)
+  void _applyFace(DetailFace next) {
     setState(() {
       _face = next;
       if (next == DetailFace.cover) _ensureBig();
     });
-    widget.onFaceChanged?.call(next);
-    final controller = widget.faceController;
-    if (controller != null && controller.value != next) controller.value = next;
+    if (next == DetailFace.cover) {
+      _fade.forward();
+    } else {
+      _fade.reverse();
+    }
   }
 
   String get _cover => httpsImageUrl(widget.coverUrl);
@@ -337,23 +370,49 @@ class _DetailFacesState extends State<DetailFaces> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        // 歌词面: Offstage 常驻 —— 切走不销毁, 滚动位置/多选/翻译态都留着
-        Positioned.fill(
-          child: Offstage(
-            offstage: _face == DetailFace.cover,
-            child: GestureDetector(
-              key: const ValueKey('detail-lyrics-face'),
-              behavior: HitTestBehavior.opaque,
-              onTap: widget.tappable ? _toggleFace : null,
-              child: widget.lyrics,
+    return AnimatedBuilder(
+      animation: _fade,
+      // 歌词面用 same-instance 的 `widget.lyrics` 传下去(不重建它的子树),
+      // 只有这层包装按帧重建; 封面面本来每帧也就是一次 LayoutBuilder。
+      builder: (context, _) {
+        final t = _fade.value; // 封面面的在场程度(0..1)
+        return Stack(
+          children: [
+            // 歌词面: 常驻 —— 切走不销毁, 滚动位置/多选/翻译态都留着。
+            // 淡到完全透明后置 Offstage: "看不见就是没有"(finder/语义树/不参与命中)。
+            Positioned.fill(
+              child: Offstage(
+                offstage: t >= 1,
+                child: IgnorePointer(
+                  ignoring: _face == DetailFace.cover,
+                  child: FadeTransition(
+                    opacity: ReverseAnimation(_fade),
+                    child: GestureDetector(
+                      key: const ValueKey('detail-lyrics-face'),
+                      behavior: HitTestBehavior.opaque,
+                      onTap: widget.tappable ? _toggleFace : null,
+                      child: widget.lyrics,
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ),
-        ),
-        if (_face == DetailFace.cover)
-          Positioned.fill(child: _buildCoverFace(context)),
-      ],
+            // 封面面: 同一套互斥 —— t == 0 时整个不参与布局(Offstage)。
+            Positioned.fill(
+              child: Offstage(
+                offstage: t <= 0,
+                child: IgnorePointer(
+                  ignoring: _face != DetailFace.cover,
+                  child: FadeTransition(
+                    opacity: _fade,
+                    child: _buildCoverFace(context),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -363,13 +422,21 @@ class _DetailFacesState extends State<DetailFaces> {
   /// 控件内**没有任何定时器**: null 时只做一个静态行。
   Widget _buildProgress(BuildContext context) {
     final theme = Theme.of(context);
-    Widget text(int positionMs) => Text(
-      _progressText(positionMs, widget.durationMs),
-      key: const ValueKey('detail-cover-progress'),
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: theme.textTheme.labelSmall?.copyWith(
-        color: theme.colorScheme.onSurfaceVariant,
+    // FittedBox(scaleDown): 窄屏 + 大字号下这一行只能拿到 108dp(300dp 屏: 行宽
+    // 268 − 三钮 160), `1:23 / 4:56` 在 1.625 字号下会被省略成 `1:23 / 4…`
+    // (审计 2026-11-28 1.2)。整体缩一点比截断可读 —— 它只是辅助信息, 不要
+    // 与右侧圆钮抢宽。
+    Widget text(int positionMs) => FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: Text(
+        _progressText(positionMs, widget.durationMs),
+        key: const ValueKey('detail-cover-progress'),
+        maxLines: 1,
+        softWrap: false,
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
       ),
     );
     final position = widget.positionMs;
@@ -405,7 +472,8 @@ class _DetailFacesState extends State<DetailFaces> {
 
           // 兜底: 区域矮到连「一行按钮 + 一张还能看的图」都放不下(横屏手机、
           // 键盘弹出、极小桌面窗口)。此时优先让图占满, 行叠在底部 —— 旧行为,
-          // 但只在这个分支里出现, 常规竖屏不会再有遮挡。
+          // 但只在这个分支里出现, 常规竖屏不会再有遮挡。行自身再包一层
+          // FittedBox(scaleDown): 区域宽不足按钮最小宽时整体缩, 不报溢出。
           if (side < _kCoverMinSide) {
             final fallbackSide = math.max(
               0.0,
@@ -425,7 +493,16 @@ class _DetailFacesState extends State<DetailFaces> {
                   left: _kCoverInset,
                   right: _kCoverInset,
                   bottom: _kCoverInset,
-                  child: row,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: SizedBox(
+                      width: math.max(
+                        _kCoverActionMinWidth,
+                        constraints.maxWidth - _kCoverInset * 2,
+                      ),
+                      child: row,
+                    ),
+                  ),
                 ),
               ],
             );
@@ -527,7 +604,7 @@ class _DetailFacesState extends State<DetailFaces> {
             TweenAnimationBuilder<double>(
               tween: Tween<double>(begin: 0, end: 1),
               duration: _bigFaded ? Duration.zero : _kBigFade,
-              onEnd: () => _bigFaded = true,
+              onEnd: () => _bigFadedKeys.put(_bigCacheKey, true),
               builder: (context, opacity, child) =>
                   Opacity(opacity: opacity, child: child),
               child: ClipRRect(

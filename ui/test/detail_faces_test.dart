@@ -22,6 +22,16 @@ import 'package:minincm/src/detail_faces.dart';
 ///   的回归网: 不注入 saveImage, 只 mock 通道。
 Widget _app(Widget child) => MaterialApp(home: Scaffold(body: child));
 
+/// 切面现在是 200ms 交叉淡入(2026-11-28): 点完之后必须把动画走完再断言。
+///
+/// 为什么不能只 `pump()` 一帧: 动画起点那一帧封面面还是 `Offstage`(t=0),
+/// 歌词面还完全可见 —— 于是 finder 与点击都会落空。动画期间两面同时在场是
+/// 有意的(交叉淡), 面本身仍然互斥。
+Future<void> _settleFace(WidgetTester tester) async {
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 220));
+}
+
 /// 歌词面的替身: 40 行固定高, 可注入 controller 以便断言滚动位置
 Widget _lyrics({ScrollController? controller}) => ListView.builder(
   controller: controller,
@@ -70,14 +80,14 @@ void main() {
     expect(find.byKey(const ValueKey('detail-cover-face')), findsNothing);
 
     await tester.tap(find.text('第0句'));
-    await tester.pump();
+    await _settleFace(tester);
 
     expect(find.byKey(const ValueKey('detail-cover-face')), findsOneWidget);
     // Offstage: 默认 finder 跳过, 等价于"歌词不可见"
     expect(find.text('第0句'), findsNothing);
 
     await tester.tap(find.byKey(const ValueKey('detail-cover-face')));
-    await tester.pump();
+    await _settleFace(tester);
 
     expect(find.byKey(const ValueKey('detail-cover-face')), findsNothing);
     expect(find.text('第0句'), findsOneWidget);
@@ -103,12 +113,12 @@ void main() {
 
     // 拖动后可见的是第 7~14 句左右, 轻点其中一句切面
     await tester.tap(find.text('第8句'));
-    await tester.pump();
+    await _settleFace(tester);
     expect(find.byKey(const ValueKey('detail-cover-face')), findsOneWidget);
     expect(controller.offset, offset);
 
     await tester.tap(find.byKey(const ValueKey('detail-cover-face')));
-    await tester.pump();
+    await _settleFace(tester);
     expect(controller.offset, offset);
   });
 
@@ -125,7 +135,7 @@ void main() {
       ),
     );
     await tester.tap(find.text('第0句'));
-    await tester.pump();
+    await _settleFace(tester);
     expect(find.byKey(const ValueKey('detail-cover-face')), findsNothing);
     expect(find.text('第0句'), findsOneWidget);
   });
@@ -135,7 +145,7 @@ void main() {
       _app(DetailFaces(trackId: BigInt.one, coverUrl: null, lyrics: _lyrics())),
     );
     await tester.tap(find.text('第0句'));
-    await tester.pump();
+    await _settleFace(tester);
 
     expect(
       find.byKey(const ValueKey('detail-cover-placeholder')),
@@ -162,7 +172,7 @@ void main() {
 
     await tester.pumpWidget(build(BigInt.one, _cover));
     await tester.tap(find.text('第0句'));
-    await tester.pump();
+    await _settleFace(tester);
     expect(find.byKey(const ValueKey('detail-cover-face')), findsOneWidget);
     expect(fetches, 1, reason: '切到封面面才开始取大图');
 
@@ -200,7 +210,7 @@ void main() {
       ),
     );
     await tester.tap(find.text('第0句'));
-    await tester.pump();
+    await _settleFace(tester);
 
     await tester.tap(find.byKey(const ValueKey('detail-cover-save')));
     // 两帧: 一帧跑完 await 链, 一帧把 SnackBar 挂上
@@ -229,7 +239,7 @@ void main() {
       ),
     );
     await tester.tap(find.text('第0句'));
-    await tester.pump();
+    await _settleFace(tester);
     await tester.tap(find.byKey(const ValueKey('detail-cover-save')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
@@ -264,7 +274,7 @@ void main() {
         ),
       );
       await tester.tap(find.text('第0句'));
-      await tester.pump();
+      await _settleFace(tester);
       await tester.tap(find.byKey(const ValueKey('detail-cover-save')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
@@ -298,7 +308,7 @@ void main() {
         ),
       );
       await tester.tap(find.text('第0句'));
-      await tester.pump();
+      await _settleFace(tester);
       await tester.tap(find.byKey(const ValueKey('detail-cover-view')));
       await tester.pumpAndSettle();
 
@@ -338,7 +348,7 @@ void main() {
     );
 
     await tester.tap(find.text('第0句'));
-    await tester.pump();
+    await _settleFace(tester);
 
     // 第一帧: 小图已经在位(不再白屏等 1600 大图)
     expect(find.byKey(const ValueKey('detail-cover-thumb')), findsOneWidget);
@@ -351,9 +361,9 @@ void main() {
     // 连续来回切 3 轮: 取图/解码次数不增加
     for (var i = 0; i < 3; i++) {
       await tester.tap(find.byKey(const ValueKey('detail-cover-face')));
-      await tester.pump();
+      await _settleFace(tester);
       await tester.tap(find.text('第0句'));
-      await tester.pump();
+      await _settleFace(tester);
       expect(find.byKey(const ValueKey('detail-cover-full')), findsOneWidget);
     }
     expect(fetches, 1, reason: '同一首歌的大图字节缓存在 State 里, 只取一次');
@@ -375,7 +385,7 @@ void main() {
       ),
     );
     await tester.tap(find.text('第0句'));
-    await tester.pump();
+    await _settleFace(tester);
 
     final comments = find.byKey(const ValueKey('detail-cover-comments'));
     expect(comments, findsOneWidget);
@@ -405,7 +415,7 @@ void main() {
       ),
     );
     await tester.tap(find.text('第0句'));
-    await tester.pump();
+    await _settleFace(tester);
 
     expect(find.byKey(const ValueKey('detail-cover-comments')), findsNothing);
     expect(find.byTooltip('查看评论'), findsNothing);
@@ -432,7 +442,7 @@ void main() {
     expect(find.byKey(const ValueKey('detail-cover-face')), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('detail-cover-face')));
-    await tester.pump();
+    await _settleFace(tester);
     expect(find.text('第0句'), findsOneWidget);
     expect(changed, [DetailFace.lyrics]);
   });
@@ -455,17 +465,17 @@ void main() {
 
     // home_page 的「点封面」= 把记忆面翻到另一面(见 onOpenDetail)
     face.value = oppositeDetailFace(face.value);
-    await tester.pump();
+    await _settleFace(tester);
     expect(find.byKey(const ValueKey('detail-cover-face')), findsOneWidget);
 
     face.value = oppositeDetailFace(face.value);
-    await tester.pump();
+    await _settleFace(tester);
     expect(find.byKey(const ValueKey('detail-cover-face')), findsNothing);
     expect(find.text('第0句'), findsOneWidget);
 
     // 用户手动切面 → 控制器跟着走(下一次点封面才从正确的面翻起)
     await tester.tap(find.text('第0句'));
-    await tester.pump();
+    await _settleFace(tester);
     expect(face.value, DetailFace.cover);
   });
 
@@ -499,7 +509,7 @@ void main() {
     expect(find.byKey(const ValueKey('detail-cover-progress')), findsNothing);
 
     await tester.tap(find.text('第0句'));
-    await tester.pump();
+    await _settleFace(tester);
 
     expect(find.text('1:23 / 4:56'), findsOneWidget);
     expect(find.text('轻点画面返回歌词'), findsNothing);
@@ -527,7 +537,7 @@ void main() {
       ),
     );
     await tester.tap(find.text('第0句'));
-    await tester.pump();
+    await _settleFace(tester);
     expect(find.text('0:00 / --:--'), findsOneWidget);
 
     // 负值同样归到 `--:--`(上游异常时不留回绕的时间)
@@ -588,7 +598,7 @@ void main() {
       expect(tester.takeException(), isNull);
 
       await tester.tap(find.text('第0句'));
-      await tester.pump();
+      await _settleFace(tester);
       expect(tester.takeException(), isNull);
       expect(find.byKey(const ValueKey('detail-cover-face')), findsOneWidget);
 
@@ -609,7 +619,7 @@ void main() {
         ),
       );
       await tester.tap(find.text('第0句'));
-      await tester.pump();
+      await _settleFace(tester);
       expect(tester.takeException(), isNull);
       expect(find.text('暂无封面'), findsOneWidget);
     });
@@ -647,7 +657,7 @@ void main() {
         ),
       );
       await tester.tap(find.text('第0句'));
-      await tester.pump();
+      await _settleFace(tester);
 
       final view = tester.getRect(
         find.byKey(const ValueKey('detail-cover-face')),
@@ -675,4 +685,82 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+  // ---------------- 切面过渡(2026-11-28: 200ms 交叉淡入) ----------------
+
+  testWidgets('切面交叉淡入: 动画中两面同时在场, 结束后只剩一面参与布局', (tester) async {
+    await tester.pumpWidget(
+      _app(
+        DetailFaces(
+          trackId: BigInt.one,
+          coverUrl: _cover,
+          lyrics: _lyrics(),
+          fetchImage: (url) async => _png1x1,
+        ),
+      ),
+    );
+    await tester.tap(find.text('第0句'));
+    await tester.pump();
+    // 动画走到一半: 两面都还在树里(封面面已从 Offstage 出来), 各占一半不透明度
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(
+      find.byKey(const ValueKey('detail-cover-face'), skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('detail-lyrics-face'), skipOffstage: false),
+      findsOneWidget,
+    );
+    final coverFade = tester.widget<FadeTransition>(
+      find
+          .ancestor(
+            of: find.byKey(const ValueKey('detail-cover-face')),
+            matching: find.byType(FadeTransition),
+          )
+          .first,
+    );
+    expect(coverFade.opacity.value, allOf(greaterThan(0.1), lessThan(0.95)));
+
+    // 结束时歌词面置 Offstage(看不见就是没有), 封面面独占
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.byKey(const ValueKey('detail-cover-face')), findsOneWidget);
+    expect(find.text('第0句'), findsNothing);
+  });
+
+  testWidgets('同一首歌重新挂载(歌词页收起再展开)不再重放大图淡入', (tester) async {
+    // 用**独一无二**的 trackId + coverUrl: 淡入记忆是会话级的, 复用别的用例
+    // 用过的键会让"首帧该从 0 淡起"这条断言假红
+    const url = 'https://p1.music.126.net/refade/y.jpg';
+    Widget build(String key) => _app(
+      DetailFaces(
+        key: ValueKey(key),
+        trackId: BigInt.from(424242),
+        coverUrl: url,
+        lyrics: _lyrics(),
+        initialFace: DetailFace.cover,
+        fetchImage: (url) async => _png1x1,
+      ),
+    );
+    double fadeOpacity() => tester
+        .widgetList<Opacity>(
+          find.ancestor(
+            of: find.byKey(const ValueKey('detail-cover-full')),
+            matching: find.byType(Opacity),
+          ),
+        )
+        .first
+        .opacity;
+
+    await tester.pumpWidget(build('first'));
+    await tester.pump(); // 让注入的 fetchImage 完成, 大图层挂上
+    // 首帧: 大图从 0 淡起
+    expect(fadeOpacity(), lessThan(0.5));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(fadeOpacity(), 1.0);
+
+    // 换 key = 新 State(等价于歌词页收起再展开): 记忆在会话级, 直接给最终画面
+    await tester.pumpWidget(build('second'));
+    await tester.pump();
+    await tester.pump();
+    expect(fadeOpacity(), 1.0, reason: '同一首歌不该再淡一次');
+  });
 }
