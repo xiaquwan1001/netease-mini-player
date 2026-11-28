@@ -432,15 +432,20 @@ class PlaybackCoordinator extends ChangeNotifier {
   _prefetchedUrls =
       <int, ({String url, String level, DateTime at, StreamNote? note})>{};
 
-  /// 取出可用的预取直链(一次性: 用过就删, 避免复用过期地址)
+  /// 取出可用的预取直链(**复用, 不删**; 只靠 TTL + 档位判定失效)。
+  ///
+  /// 旧实现是"一次性"(命中即 `remove`), 于是**单曲循环每圈都要重新取链**:
+  /// 每圈多一次上游请求 (有时还会重新解密) —— 2026-11-28 缓存审计 P1-4。
+  /// 直链本身有时效(分钟级), 靠下面 4 分钟 TTL 与档位比对就能保证不用过期地址。
   ({String url, StreamNote? note})? _takePrefetchedUrl(
     int trackId,
     String level,
   ) {
-    final hit = _prefetchedUrls.remove(trackId);
+    final hit = _prefetchedUrls[trackId];
     if (hit == null) return null;
     if (hit.level != level) return null;
     if (DateTime.now().difference(hit.at) > const Duration(minutes: 4)) {
+      _prefetchedUrls.remove(trackId); // 过期了就挤掉, 不留给下一次
       return null;
     }
     return (url: hit.url, note: hit.note);

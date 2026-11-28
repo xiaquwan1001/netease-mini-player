@@ -584,6 +584,12 @@ class _DetailFacesState extends State<DetailFaces>
   Widget _buildCoverImage(BuildContext context, double side) {
     final bytes = _bigBytes;
     final radius = BorderRadius.circular(12);
+    // 解码尺寸跟着**显示像素**走(而不是原图尺寸): 网易最大原图档 1600px,
+    // 手机上 276dp×4.8 ≈ 1325px 差不多; 桌面右栏(394dp×1)只需 394px ——
+    // 不限制就得把 1600²×4 ≈ 10MB 解到内存里只为显示 394px(审计 P1-6)。
+    // cacheWidth 会进 ImageCache 的 key, 与其它尺寸的同一张图不冲突。
+    final dpr = MediaQuery.maybeDevicePixelRatioOf(context) ?? 1.0;
+    final decodePx = (side * dpr).round();
     return SizedBox(
       key: const ValueKey('detail-cover-image'),
       width: side,
@@ -612,6 +618,7 @@ class _DetailFacesState extends State<DetailFaces>
                 child: Image.memory(
                   bytes,
                   key: const ValueKey('detail-cover-full'),
+                  cacheWidth: decodePx > 0 ? decodePx : null,
                   fit: BoxFit.cover,
                   gaplessPlayback: true,
                   // 大图解码失败: 保留底下的小图, 不抛异常也不留白

@@ -52,9 +52,17 @@ class _UaNetworkImage extends ImageProvider<_UaNetworkImage> {
     ..maxConnectionsPerHost = 6
     ..connectionTimeout = const Duration(seconds: 15);
 
-  /// 已下载的原始字节(LRU, 200 张上限): 避免 provider 重建时重复拉图.
+  /// 已下载的原始字节(LRU: 200 张 / **16MB** 双上限): 避免 provider 重建时重复拉图.
+  ///
+  /// 只按条数的旧实现在"条目大小差两个数量级"时完全失控: 200 条里既有 20KB 的
+  /// 列表缩略图也有 1–2MB 的原图(详情页大图/取色原图), 上界就是 400MB;
+  /// 16MB 能把"一屏缩略图 + 当前歌的大图"完整盖住, 又不至于和 Flutter 自己的
+  /// ImageCache 叠出上百 MB 峰值(2026-11-28 缓存审计 P1-2)。
+  static const int kBytesCacheMaxBytes = 16 << 20;
   static final LruMap<String, Uint8List> _bytes = LruMap<String, Uint8List>(
     maxEntries: 200,
+    maxBytes: kBytesCacheMaxBytes,
+    sizeOf: (bytes) => bytes.lengthInBytes,
   );
 
   /// 同 URL 的在途请求(合并并发调用)。

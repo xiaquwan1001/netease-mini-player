@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../app_settings.dart';
+import '../lru.dart';
 import '../lyric.dart';
 import '../lyric_source.dart';
 import '../net_retry.dart' show friendlyError;
@@ -31,6 +32,8 @@ class LyricController extends ChangeNotifier {
     required this.pollPlayer,
     required this.itemExtentOf,
     required this.toast,
+    this.loaders,
+    this.rawLyricOf,
   });
 
   /// 播放态快照(真相在页面的 `_player`)。
@@ -43,6 +46,17 @@ class LyricController extends ChangeNotifier {
   final double Function() itemExtentOf;
 
   final void Function(String message) toast;
+
+  /// 三来源 loader; null = 走 FFI 的 `rust.*`。
+  ///
+  /// `@visibleForTesting`: 只有单测会传(换假 loader, 全程不联网); 生产由页面
+  /// 构造时不传, 一律走 FFI。
+  @visibleForTesting
+  final LyricSourceLoaders? loaders;
+
+  /// 原始 LRC 兜底取数; null = 走 FFI 的 `rust.lyric`(同上, 只给单测注入)
+  @visibleForTesting
+  final Future<String> Function(BigInt trackId)? rawLyricOf;
 
   bool _disposed = false;
 
@@ -130,7 +144,37 @@ class LyricController extends ChangeNotifier {
     return -1;
   }
 
+  /// 已解析歌词的会话级缓存(按曲目 id, LRU 24 首)。
+  ///
+  /// 旧实现只有"当前一首"这一槽: A→B→A 每次都重新取(实测 `debugLoadCount` 3),
+  /// 而用户最常见的动作恰恰是「进详情页 → 返回 → 再进」(2026-11-28 缓存审计 P1-5)。
+  /// 24 首 ≈ 一小时的播放历史, 内存可以忽略(纯文本/行级数据都是短的)。
+  final LruMap<BigInt, _LyricSnapshot> _lyricCache =
+      LruMap<BigInt, _LyricSnapshot>(maxEntries: 24);
+
   // ---------------- 加载 ----------------
+
+  /// 把一份快照套到当前状态上(命中缓存与网络取回共用同一条路)。
+  ///
+  /// 只有 id 仍然是当前曲目时才生效 —— 在飞的请求回来后曲目已经换了,
+  /// 套上去就会看到"新歌配旧歌词"。
+  void _applySnapshot(BigInt trackId, _LyricSnapshot snap) {
+    if (_disposed || _lyricTrackId != trackId) return;
+    _lyricError = null;
+    _wordLines = snap.word ?? const [];
+    _lyricLines = snap.lines ?? const [];
+    _lyricTimes = snap.times ?? const [];
+    _lyricPlain = snap.plain;
+    _lyricCache.put(trackId, snap); // 回填/触碰 LRU
+    notifyListeners();
+    if (snap.word != null) {
+      // 逐字歌词靠 [positionMs] 自绘高光, 不需要行级下标
+      _wordPositionMs.value = player()?.positionMs.toInt() ?? 0;
+      _playing.value = player()?.playing ?? false;
+    } else {
+      syncIndex(player() ?? PlayerView.empty);
+    }
+  }
 
   Future<void> load(BigInt trackId) async {
     if (_lyricTrackId == trackId) return;
@@ -146,68 +190,82 @@ class LyricController extends ChangeNotifier {
       notifyListeners();
       _wordPositionMs.value = 0;
     }
+    // 会话缓存命中: 不再发请求(A→B→A 只取两次)
+    final cached = _lyricCache[trackId];
+    if (cached != null) {
+      _applySnapshot(trackId, cached);
+      return;
+    }
     // B13/C2: 逐字歌词来源决策(按用户偏好, auto 打分择优), loader 可注入(单测不联网)。
     final resolved = await resolveLyricSource(
       trackId,
-      LyricSourceLoaders(
-        yrc: (id) async => rust.wordLyricLines(trackId: id),
-        ttml: (id) async => rust.ttmlLyricLines(trackId: id),
-        lineLevel: (id) async => rust.lyricLinesI18N(trackId: id),
-      ),
+      loaders ??
+          LyricSourceLoaders(
+            yrc: (id) async => rust.wordLyricLines(trackId: id),
+            ttml: (id) async => rust.ttmlLyricLines(trackId: id),
+            lineLevel: (id) async => rust.lyricLinesI18N(trackId: id),
+          ),
       preference: AppSettings.instance.lyricSourcePreference,
     );
     if (resolved != null && !_disposed && _lyricTrackId == trackId) {
       final word = resolved.word;
       if (word != null) {
-        _lyricError = null;
-        _lyricPlain = null;
-        _wordLines = [
-          for (var i = 0; i < word.lines.length; i++)
-            WordLyricLineData(
-              startMs: word.lines[i].startMs,
-              endMs: word.lines[i].endMs,
-              words: [
-                for (final w in word.lines[i].words)
-                  WordLyricWord(
-                    startMs: w.startMs,
-                    endMs: w.endMs,
-                    text: w.text,
-                  ),
-              ],
-              sub: i < word.translationLines.length
-                  ? word.translationLines[i]
-                  : null,
-            ),
-        ];
-        notifyListeners();
-        _wordPositionMs.value = player()?.positionMs.toInt() ?? 0;
-        _playing.value = player()?.playing ?? false;
+        _applySnapshot(
+          trackId,
+          _LyricSnapshot(
+            word: [
+              for (var i = 0; i < word.lines.length; i++)
+                WordLyricLineData(
+                  startMs: word.lines[i].startMs,
+                  endMs: word.lines[i].endMs,
+                  words: [
+                    for (final w in word.lines[i].words)
+                      WordLyricWord(
+                        startMs: w.startMs,
+                        endMs: w.endMs,
+                        text: w.text,
+                      ),
+                  ],
+                  sub: i < word.translationLines.length
+                      ? word.translationLines[i]
+                      : null,
+                ),
+            ],
+          ),
+        );
         return;
       }
       final lines = resolved.line;
       if (lines != null && lines.isNotEmpty) {
-        _lyricError = null;
-        _lyricLines = [
-          for (final l in lines)
-            ParsedLyricLine(timeMs: l.timeMs, text: l.text, sub: l.sub),
-        ];
-        _lyricTimes = [for (final l in lines) l.timeMs];
-        notifyListeners();
-        syncIndex(player() ?? PlayerView.empty);
+        _applySnapshot(
+          trackId,
+          _LyricSnapshot(
+            lines: [
+              for (final l in lines)
+                ParsedLyricLine(timeMs: l.timeMs, text: l.text, sub: l.sub),
+            ],
+            times: [for (final l in lines) l.timeMs],
+          ),
+        );
         return;
       }
     }
     try {
-      final lines = await rust.lyricLinesI18N(trackId: trackId);
+      final lines = await (loaders?.lineLevel ?? rust.lyricLinesI18N)(
+        trackId: trackId,
+      );
       if (_disposed || _lyricTrackId != trackId) return;
       if (lines.isNotEmpty) {
-        _lyricLines = [
-          for (final l in lines)
-            ParsedLyricLine(timeMs: l.timeMs, text: l.text, sub: l.sub),
-        ];
-        _lyricTimes = [for (final l in lines) l.timeMs];
-        notifyListeners();
-        syncIndex(player() ?? PlayerView.empty);
+        _applySnapshot(
+          trackId,
+          _LyricSnapshot(
+            lines: [
+              for (final l in lines)
+                ParsedLyricLine(timeMs: l.timeMs, text: l.text, sub: l.sub),
+            ],
+            times: [for (final l in lines) l.timeMs],
+          ),
+        );
         return;
       }
       // 逐行接口没有内容(纯文本/老格式歌词) → 退回原始 LRC
@@ -231,6 +289,8 @@ class LyricController extends ChangeNotifier {
     final id = player()?.trackId;
     if (id == null) return Future<void>.value();
     _lyricTrackId = null;
+    // 重试 = 用户明确要求"再取一次": 命中的那条会话缓存必须作废, 否则点了等于没点
+    _lyricCache.remove(id);
     return load(id);
   }
 
@@ -238,22 +298,19 @@ class LyricController extends ChangeNotifier {
   /// 只有纯文本就走 [PlainLyricView]。返回是否有内容可用。
   Future<bool> _loadRawLyric(BigInt trackId) async {
     try {
-      final raw = await rust.lyric(trackId: trackId);
+      final raw = await (rawLyricOf ?? rust.lyric)(trackId);
       if (_disposed || _lyricTrackId != trackId) return false;
       final doc = parseLrc(raw);
       if (doc.isEmpty) return false;
-      _lyricError = null;
-      if (doc.hasTimeline) {
-        _lyricPlain = null;
-        _lyricLines = doc.timed;
-        _lyricTimes = [for (final l in doc.timed) l.timeMs];
-      } else {
-        _lyricLines = const [];
-        _lyricTimes = const [];
-        _lyricPlain = doc.plain;
-      }
-      notifyListeners();
-      if (doc.hasTimeline) syncIndex(player() ?? PlayerView.empty);
+      _applySnapshot(
+        trackId,
+        doc.hasTimeline
+            ? _LyricSnapshot(
+                lines: doc.timed,
+                times: [for (final l in doc.timed) l.timeMs],
+              )
+            : _LyricSnapshot(plain: doc.plain),
+      );
       return true;
     } catch (_) {
       return false;
@@ -435,4 +492,24 @@ class LyricController extends ChangeNotifier {
     _playing.dispose();
     super.dispose();
   }
+}
+
+/// 一份「已解析好的歌词」: 逐字 / 行级 / 纯文本三者取其一。
+///
+/// 只存渲染需要的形状(不是 Rust 的原始 DTO), 这样会话缓存不用重新解析。
+class _LyricSnapshot {
+  const _LyricSnapshot({this.word, this.lines, this.times, this.plain})
+    : assert(word != null || lines != null || plain != null, '空快照没有意义');
+
+  /// 逐字歌词源(优先)
+  final List<WordLyricLineData>? word;
+
+  /// 行级歌词(有时间轴)
+  final List<ParsedLyricLine>? lines;
+
+  /// 与 [lines] 一一对应的时间轴(避免每次重新 map)
+  final List<BigInt>? times;
+
+  /// 无时间轴的纯文本(老格式歌词兜底)
+  final List<String>? plain;
 }

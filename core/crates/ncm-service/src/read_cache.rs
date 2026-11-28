@@ -56,6 +56,8 @@ pub mod endpoint {
     pub const SEARCH_HOT_DETAIL: &str = "search_hot_detail";
     /// 歌单详情(/api/v6/playlist/detail)
     pub const PLAYLIST_DETAIL: &str = "playlist_detail";
+    /// 歌单全量曲目(/api/v6/playlist/track/all)
+    pub const PLAYLIST_TRACK_ALL: &str = "playlist_track_all";
     /// 专辑详情(/api/v1/album/:id)
     pub const ALBUM_DETAIL: &str = "album_detail";
     /// LRC 歌词(/api/song/lyric)
@@ -71,6 +73,9 @@ pub mod endpoint {
 ///   搜索族匿名可用, 是 405 限流的直接来源, 参数只有关键词/分页/类型。
 /// - playlist_detail: 公开歌单数据(封面/曲目/播放量), 匿名可取; 用户点开歌单再返回
 ///   反复触发, 缓存收益大。body 里的 `subscribed` 属账号侧字段, 由会话变更清空兜住。
+/// - playlist_track_all: 歌单曲目列表(点开歌单/回到列表/「我喜欢的音乐」
+///   都会重取)。曲目本身的增删走用户主动操作, 5 分钟 TTL 不会让用户看到
+///   "刚删掉的歌还在"(会话变更/主动刷新都会清)。
 /// - album_detail: 同 playlist_detail, 专辑详情是纯公开数据。
 /// - lyric / lyric_new: 歌词内容几乎不变, 播放页/滚动/切歌会反复取。
 ///
@@ -87,6 +92,7 @@ pub const CACHEABLE_ENDPOINTS: &[&str] = &[
     endpoint::SEARCH_HOT,
     endpoint::SEARCH_HOT_DETAIL,
     endpoint::PLAYLIST_DETAIL,
+    endpoint::PLAYLIST_TRACK_ALL,
     endpoint::ALBUM_DETAIL,
     endpoint::LYRIC,
     endpoint::LYRIC_NEW,
@@ -350,6 +356,7 @@ mod tests {
             endpoint::SEARCH_HOT,
             endpoint::SEARCH_HOT_DETAIL,
             endpoint::PLAYLIST_DETAIL,
+            endpoint::PLAYLIST_TRACK_ALL,
             endpoint::ALBUM_DETAIL,
             endpoint::LYRIC,
             endpoint::LYRIC_NEW,

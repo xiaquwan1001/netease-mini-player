@@ -541,6 +541,8 @@ class _HomePageState extends State<HomePage> {
 
   /// 歌词状态机有变更时重建(与拆分前每处 setState 一一对应: 一次通知 = 一次重建)。
   void _onLyricChanged() {
+    // 展开歌词时补一次封面主色: 换曲时若歌词页没开, [_syncCoverPalette] 会跳过
+    if (_lyric.visible) unawaited(_syncCoverPalette());
     if (mounted) setState(() {});
   }
 
@@ -860,7 +862,12 @@ class _HomePageState extends State<HomePage> {
   String? _coverPaletteUrl;
 
   /// 曲目切换后重算封面主色. 同 URL 命中 cover_palette 的 LRU 缓存, 不会重复计算.
+  ///
+  /// **只为歌词页背景服务 ⇒ 歌词页没开就不算**(2026-11-28 审计: 旧实现在换曲时无条件
+  /// 跑, 每个新曲目都多一次图片下载 + 解码)。跳过时不写 [_coverPaletteUrl],
+  /// 于是展开歌词时的 [_onLyricChanged] 重新调一次就能补上。
   Future<void> _syncCoverPalette() async {
+    if (!_lyric.visible) return;
     final url = _current?.coverUrl;
     if (url == _coverPaletteUrl) return;
     _coverPaletteUrl = url;

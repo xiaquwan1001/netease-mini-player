@@ -96,5 +96,34 @@ void main() {
         throwsA(isA<AssertionError>()),
       );
     });
+
+    test('字节超限淘汰(条目数没超也要淘汰): 单条比上限大时至少留一条', () {
+      // 图片字节缓存就靠这条: 200 条里混着 20KB 缩略图与 1MB 原图(2026-11-28 审计 P1-2)
+      final lru = LruMap<String, List<int>>(
+        maxEntries: 200,
+        maxBytes: 100,
+        sizeOf: (v) => v.length,
+      );
+      lru.put('a', List<int>.filled(40, 0));
+      lru.put('b', List<int>.filled(40, 0));
+      expect(lru.length, 2);
+      expect(lru.bytes, 80);
+
+      lru.put('c', List<int>.filled(40, 0)); // 120 > 100 ⇒ 淘汰最久未用的 a
+      expect(lru.keys.toList(), <String>['b', 'c']);
+      expect(lru.bytes, 80);
+
+      // 覆盖写: 旧的字节要先扣掉(否则会越算越大)
+      lru.put('c', List<int>.filled(10, 0));
+      expect(lru.bytes, 50);
+
+      // 单条就超上限: 仍保留这一条(缓存不该形同关闭)
+      lru.put('huge', List<int>.filled(1000, 0));
+      expect(lru.containsKey('huge'), isTrue);
+      expect(lru.length, 1);
+
+      lru.remove('huge');
+      expect(lru.bytes, 0);
+    });
   });
 }

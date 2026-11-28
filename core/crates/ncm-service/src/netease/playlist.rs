@@ -236,19 +236,39 @@ impl NeteaseProvider {
     }
 
     /// 歌单曲目(vendor 内部先取 trackIds 再批量取详情)
+    ///
+    /// 走只读缓存(2026-11-28 缓存审计 P1-3): 用户「点开歌单 → 返回 → 再点开」
+    /// 以及「我喜欢的音乐」在首页/我的页两处入口会把同一个 1000 首的列表取两遍
+    /// (每次 = 1 次 track/all, 内部还有一次 trackIds 拉取)。缓存的是 body,
+    /// 会话变更时 `ReadCache::clear` 会整体清空(口径同 playlist_detail)。
     pub(super) fn playlist_songs<'a>(
         &'a self,
         playlist_id: u64,
     ) -> BoxFuture<'a, ProviderResult<Vec<Song>>> {
         Box::pin(async move {
-            let (client, domain, ua, cookie) = self.snapshot();
             if playlist_id == 0 {
                 return Err(ProviderError::not_found("playlist id 为空"));
             }
-            let q = make_query(&cookie, &domain, &ua).param("id", &playlist_id.to_string());
-            let resp = client.playlist_track_all(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            Ok(parse_song_list(&resp.body))
+            let key = crate::read_cache::cache_key(
+                crate::read_cache::endpoint::PLAYLIST_TRACK_ALL,
+                &[("id", playlist_id.to_string())],
+            );
+            let body = self
+                .read_cache()
+                .get_or_load(
+                    crate::read_cache::endpoint::PLAYLIST_TRACK_ALL,
+                    &key,
+                    || async {
+                        let (client, domain, ua, cookie) = self.snapshot();
+                        let q = make_query(&cookie, &domain, &ua)
+                            .param("id", &playlist_id.to_string());
+                        let resp = client.playlist_track_all(&q).await.map_err(map_error)?;
+                        check_body(&resp.body)?;
+                        Ok(resp.body)
+                    },
+                )
+                .await?;
+            Ok(parse_song_list(&body))
         })
     }
 

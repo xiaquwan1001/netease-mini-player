@@ -560,14 +560,30 @@ impl NeteaseProvider {
     pub(super) fn liked_songs_ordered(&self) -> BoxFuture<'_, ProviderResult<Vec<Song>>> {
         Box::pin(async move {
             let playlist_id = self.liked_playlist_id().await?;
-            let (client, domain, ua, cookie) = self.snapshot();
-            let q = make_query(&cookie, &domain, &ua)
-                .param("id", &playlist_id.to_string())
-                .param("s", "8");
-            let resp = client.playlist_detail(&q).await.map_err(map_error)?;
-            check_body(&resp.body)?;
-            let mut entries: Vec<(u64, i64)> = resp
-                .body
+            // 这条 playlist_detail 也走只读缓存(2026-11-28 缓存审计 P1-3):
+            // 「我的」页与「我喜欢的音乐」详情页各取一次 trackIds, 1000 首时是两次
+            // 同一个请求。key 带上 `s=8`(与普通歌单详情区分), 会话变更整体清空。
+            let key = crate::read_cache::cache_key(
+                crate::read_cache::endpoint::PLAYLIST_DETAIL,
+                &[("id", playlist_id.to_string()), ("s", "8".to_string())],
+            );
+            let body = self
+                .read_cache()
+                .get_or_load(
+                    crate::read_cache::endpoint::PLAYLIST_DETAIL,
+                    &key,
+                    || async {
+                        let (client, domain, ua, cookie) = self.snapshot();
+                        let q = make_query(&cookie, &domain, &ua)
+                            .param("id", &playlist_id.to_string())
+                            .param("s", "8");
+                        let resp = client.playlist_detail(&q).await.map_err(map_error)?;
+                        check_body(&resp.body)?;
+                        Ok(resp.body)
+                    },
+                )
+                .await?;
+            let mut entries: Vec<(u64, i64)> = body
                 .get("playlist")
                 .and_then(|p| p.get("trackIds"))
                 .and_then(Value::as_array)
@@ -588,6 +604,8 @@ impl NeteaseProvider {
             // at 大 = 更晚收藏; at 缺失(0) 保持服务端顺序
             entries.sort_by_key(|e| std::cmp::Reverse(e.1));
             let ids: Vec<u64> = entries.into_iter().map(|(id, _)| id).collect();
+            // 曲目详情(body 带按账号算的 privileges)不进缓存, 仍直连上游
+            let (client, domain, ua, cookie) = self.snapshot();
             let mut by_id: std::collections::HashMap<u64, Song> = std::collections::HashMap::new();
             for chunk in ids.chunks(500) {
                 let joined = chunk

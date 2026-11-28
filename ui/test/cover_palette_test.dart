@@ -342,6 +342,21 @@ void main() {
       expect(find.textContaining('窄屏回归测试'), findsOneWidget);
     });
   });
+  group('取色只请求缩略图(2026-11-28 缓存审计 P1-1)', () {
+    test('paletteRequestUrl: 加 param=128y128, 不再拉原图', () {
+      expect(
+        paletteRequestUrl('https://p1.music.126.net/abc==/1.jpg'),
+        endsWith('?param=128y128'),
+      );
+      // 已有 query 的 URL 用 & 续接
+      expect(
+        paletteRequestUrl('https://p1.music.126.net/a.jpg?x=1'),
+        endsWith('&param=128y128'),
+      );
+      // 空 URL 原样返回(调用方自己早退)
+      expect(paletteRequestUrl(''), '');
+    });
+  });
 }
 
 /// 窄屏 + 大字号回归宿主: 300dp 宽 + 1.25 字号(builder 层注入, 对弹层也生效).

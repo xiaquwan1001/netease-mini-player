@@ -22,7 +22,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
-import 'cover_art.dart' show fetchImageBytes;
+import 'cover_art.dart' show fetchImageBytes, neteaseThumbUrl;
 import 'lru.dart';
 
 /// 量化位数: 5-bit/通道 → 最多 32768 个桶
@@ -51,6 +51,13 @@ const double kBackdropMinSaturation = 0.15;
 
 /// LRU 缓存上限
 const int kPaletteCacheMax = 32;
+
+/// 取色时向 CDN 请求的**边长**(px)。
+///
+/// 取色只需要色相分布(内部还会降采样到 ≤64x64), 拿原图没任何好处:
+/// 2026-11-28 审计实测每首歌都拉一次无 `?param` 的原图(1286² ⇒ 解码后 ≈6.6MB)
+/// 只为算出 2 个颜色。128px 在色相上与 1286px 无可见差异(色桶统计), 下载量 ≈1/100。
+const int kPaletteRequestPx = 128;
 
 // Flutter 3.27+ 的 Color 用 double 通道, 统一转回 0..255 整数便于 HSL 计算
 int _ch(double channel) => (channel * 255.0).round().clamp(0, 255);
@@ -402,13 +409,20 @@ Future<CoverPalette?> paletteFromUrl(
   return future;
 }
 
+/// 取色时真正请求的 URL(缩略图档位)。单独抽出来是为了能被测试直接断言:
+/// 曾经这里传的是**原图**, 换一首歌就多下+解一次 MB 级图片(2026-11-28 缓存审计 P1-1)。
+String paletteRequestUrl(String url) =>
+    neteaseThumbUrl(url, width: kPaletteRequestPx, height: kPaletteRequestPx);
+
 Future<CoverPalette?> _computeForUrl(
   String url,
   ImageProvider<Object>? provider,
 ) async {
   try {
     final image = provider == null
-        ? await _decodeWithImageHeaders(url)
+        // 只取色 ⇒ 只要缩略图(见 [kPaletteRequestPx]): 缓存键仍是原 url, 并发
+        // 调用照样合并; 下载的字节也随之缩小两个数量级。
+        ? await _decodeWithImageHeaders(paletteRequestUrl(url))
         : await _resolveImage(provider);
     return await paletteFromImage(image);
   } catch (_) {
