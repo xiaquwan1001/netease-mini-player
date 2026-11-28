@@ -22,7 +22,9 @@
 //! ## 语义
 //!
 //! - TTL 默认 [`DEFAULT_TTL`](300s): 搜索/详情这类数据变化慢, 5 分钟内复用足够。
-//! - 容量 [`DEFAULT_CAPACITY`](200 条), 满了按最近最少使用淘汰。
+//! - 容量 [`DEFAULT_CAPACITY`](200 条) + **字节上限** [`DEFAULT_MAX_BYTES`](24MB),
+//!   满了按最近最少使用淘汰; 单条超过 [`DEFAULT_MAX_ENTRY_BYTES`](4MB) 的不入池。
+//! - body 以 `Arc<Value>` 存放与返回: 命中只 `Arc::clone`, 不深拷贝(审计 R1)。
 //! - 只缓存**成功**的结果; 错误(尤其是 405/风控)不缓存, 免得把瞬时故障钉住。
 //! - 同 key 并发: 只有一个请求真打上游, 其余等它出结果后直接命中缓存
 //!   (靠每 key 一把 `tokio::sync::Mutex`; 不引入额外依赖)。
@@ -41,6 +43,14 @@ use ncm_provider::ProviderResult;
 pub const DEFAULT_TTL: Duration = Duration::from_secs(300);
 /// 默认容量: 200 条(key 数)。
 pub const DEFAULT_CAPACITY: usize = 200;
+/// 默认**字节**上限: 24MB。
+///
+/// 只按条数限容在"body 大小差三个数量级"时失控: 搜索结果是几 KB, 而 1000 首歌单
+/// (`playlist_track_all` / `liked` 的 `s=8` detail) 的 body 是 1–3MB, 200 条上界
+/// 就是数百 MB(2026-11-28 Rust 审计 R1)。
+pub const DEFAULT_MAX_BYTES: usize = 24 << 20;
+/// 单条上限: 4MB。超过就不入缓存(宁可每次重取, 也不让一条大 body 把整池挤空)。
+pub const DEFAULT_MAX_ENTRY_BYTES: usize = 4 << 20;
 
 /// 接口名常量. 名字进缓存 key, 必须与 [`CACHEABLE_ENDPOINTS`] 里的字符串一致。
 pub mod endpoint {
@@ -123,14 +133,38 @@ pub fn cache_key(endpoint: &str, params: &[(&str, String)]) -> String {
     out
 }
 
+/// body 的字节估算: 递归数标量 + 键名 + 容器开销。
+///
+/// 不序列化(那本身就要一次全量拷贝): 只要量级正确就能让字节淘汰生效。
+fn approx_json_bytes(value: &Value) -> usize {
+    match value {
+        Value::Null | Value::Bool(_) => 8,
+        Value::Number(n) => n.to_string().len().max(8),
+        Value::String(s) => s.len() + 16,
+        Value::Array(items) => 16 + items.iter().map(approx_json_bytes).sum::<usize>(),
+        Value::Object(map) => {
+            16 + map
+                .iter()
+                .map(|(k, v)| k.len() + 8 + approx_json_bytes(v))
+                .sum::<usize>()
+        }
+    }
+}
+
 struct Entry {
-    value: Value,
+    /// 命中时只是 `Arc::clone`(旧实现是 `Value::clone` —— 每次命中都深拷贝整个
+    /// body, 1000 首歌单命中一次就是一次 MB 级 alloc, 2026-11-28 Rust 审计 R1)
+    value: Arc<Value>,
+    /// 该条占多少字节(`Arc::strong_count` 不参与, 按 body 序列化后的近似值算)
+    bytes: usize,
     stored: Instant,
     used: u64,
 }
 
 struct Inner {
     entries: HashMap<String, Entry>,
+    /// 当前所有条目的字节总和(淘汰按它判)
+    bytes: usize,
     /// 同 key 单飞: 正在加载的 key -> 该 key 的串行锁。
     inflight: HashMap<String, Arc<tokio::sync::Mutex<()>>>,
 }
@@ -139,6 +173,8 @@ struct Inner {
 pub struct ReadCache {
     ttl: Duration,
     capacity: usize,
+    max_bytes: usize,
+    max_entry_bytes: usize,
     clock: AtomicU64,
     inner: Mutex<Inner>,
 }
@@ -151,12 +187,25 @@ impl Default for ReadCache {
 
 impl ReadCache {
     pub fn new(ttl: Duration, capacity: usize) -> Self {
+        Self::with_byte_budget(ttl, capacity, DEFAULT_MAX_BYTES, DEFAULT_MAX_ENTRY_BYTES)
+    }
+
+    /// 带上字节预算的构造(测试用得到小额度)。
+    pub fn with_byte_budget(
+        ttl: Duration,
+        capacity: usize,
+        max_bytes: usize,
+        max_entry_bytes: usize,
+    ) -> Self {
         Self {
             ttl,
             capacity: capacity.max(1),
+            max_bytes: max_bytes.max(1),
+            max_entry_bytes: max_entry_bytes.max(1),
             clock: AtomicU64::new(0),
             inner: Mutex::new(Inner {
                 entries: HashMap::new(),
+                bytes: 0,
                 inflight: HashMap::new(),
             }),
         }
@@ -170,6 +219,11 @@ impl ReadCache {
         self.capacity
     }
 
+    /// 当前累计字节(近似: 各条目 body 的估算大小之和)。
+    pub fn bytes(&self) -> usize {
+        self.lock().bytes
+    }
+
     /// 当前缓存条数(含已过期但尚未淘汰的条目)。
     pub fn len(&self) -> usize {
         self.lock().entries.len()
@@ -181,7 +235,9 @@ impl ReadCache {
 
     /// 清空全部缓存。会话变化(登录/登出/切账号)时必须调用。
     pub fn clear(&self) {
-        self.lock().entries.clear();
+        let mut inner = self.lock();
+        inner.entries.clear();
+        inner.bytes = 0;
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
@@ -192,12 +248,12 @@ impl ReadCache {
         self.clock.fetch_add(1, Ordering::Relaxed)
     }
 
-    /// 取缓存(命中会刷新 LRU 时间戳)。
-    pub fn get(&self, key: &str) -> Option<Value> {
+    /// 取缓存(命中会刷新 LRU 时间戳)。命中只 `Arc::clone`, **不深拷贝 body**。
+    pub fn get(&self, key: &str) -> Option<Arc<Value>> {
         self.get_at(key, Instant::now())
     }
 
-    fn get_at(&self, key: &str, now: Instant) -> Option<Value> {
+    fn get_at(&self, key: &str, now: Instant) -> Option<Arc<Value>> {
         let tick = self.next_tick();
         let mut inner = self.lock();
         let expired = {
@@ -205,36 +261,54 @@ impl ReadCache {
             now.saturating_duration_since(entry.stored) >= self.ttl
         };
         if expired {
-            inner.entries.remove(key);
+            if let Some(entry) = inner.entries.remove(key) {
+                inner.bytes = inner.bytes.saturating_sub(entry.bytes);
+            }
             return None;
         }
         let entry = inner.entries.get_mut(key)?;
         entry.used = tick;
-        Some(entry.value.clone())
+        Some(Arc::clone(&entry.value))
     }
 
-    /// 写入缓存(满了先按 LRU 淘汰一条)。
-    pub fn store(&self, key: &str, value: Value) {
+    /// 写入缓存(满了先按 LRU 淘汰)。
+    pub fn store(&self, key: &str, value: Arc<Value>) {
         self.store_at(key, value, Instant::now());
     }
 
-    fn store_at(&self, key: &str, value: Value, now: Instant) {
+    fn store_at(&self, key: &str, value: Arc<Value>, now: Instant) {
+        let bytes = approx_json_bytes(&value);
+        // 单条就超预算: 不入缓存(否则一条大 body 会把整池挤空)
+        if bytes > self.max_entry_bytes {
+            return;
+        }
         let tick = self.next_tick();
         let mut inner = self.lock();
-        if inner.entries.len() >= self.capacity && !inner.entries.contains_key(key) {
-            if let Some(victim) = inner
+        if let Some(old) = inner.entries.remove(key) {
+            inner.bytes = inner.bytes.saturating_sub(old.bytes);
+        }
+        // 条数与字节都可能有压力: 一直淘汰到"再加进去也不超"
+        while !inner.entries.is_empty()
+            && (inner.entries.len() >= self.capacity || inner.bytes + bytes > self.max_bytes)
+        {
+            let Some(victim) = inner
                 .entries
                 .iter()
                 .min_by_key(|(_, entry)| entry.used)
                 .map(|(k, _)| k.clone())
-            {
-                inner.entries.remove(&victim);
+            else {
+                break;
+            };
+            if let Some(entry) = inner.entries.remove(&victim) {
+                inner.bytes = inner.bytes.saturating_sub(entry.bytes);
             }
         }
+        inner.bytes += bytes;
         inner.entries.insert(
             key.to_string(),
             Entry {
                 value,
+                bytes,
                 stored: now,
                 used: tick,
             },
@@ -271,13 +345,14 @@ impl ReadCache {
         endpoint: &str,
         key: &str,
         load: F,
-    ) -> ProviderResult<Value>
+    ) -> ProviderResult<Arc<Value>>
     where
         F: FnOnce() -> Fut,
         Fut: Future<Output = ProviderResult<Value>>,
     {
         if !is_cacheable(endpoint) {
-            return load().await;
+            // 不入缓存的接口: 照样要回 `Arc`(调用点只读 body), 只是不进池
+            return load().await.map(Arc::new);
         }
         if let Some(hit) = self.get(key) {
             return Ok(hit);
@@ -298,12 +373,18 @@ impl ReadCache {
             return Ok(hit);
         }
         let result = load().await;
-        if let Ok(value) = &result {
-            self.store(key, value.clone());
-        }
         // 先放锁(_inflight 随函数结束才 drop), 后来者不会拿到一把已无人等的锁去排队
         drop(guard);
-        result
+        match result {
+            Ok(value) => {
+                // 池里与返回值共用一个 `Arc`: 一次请求只搬一份 body(旧实现先 clone 存、
+                // 再 clone 返回, 命中时又一次 clone —— 三次 MB 级复制, 审计 R1)
+                let value = Arc::new(value);
+                self.store(key, Arc::clone(&value));
+                Ok(value)
+            }
+            Err(err) => Err(err),
+        }
     }
 }
 
@@ -426,7 +507,7 @@ mod tests {
     fn ttl_expiry() {
         let cache = ReadCache::new(Duration::from_secs(300), 8);
         let now = Instant::now();
-        cache.store_at("k", serde_json::json!({ "v": 1 }), now);
+        cache.store_at("k", Arc::new(serde_json::json!({ "v": 1 })), now);
         assert!(cache.get_at("k", now + Duration::from_secs(299)).is_some());
         assert!(
             cache.get_at("k", now + Duration::from_secs(300)).is_none(),
@@ -438,11 +519,11 @@ mod tests {
     #[test]
     fn lru_eviction() {
         let cache = ReadCache::new(Duration::from_secs(300), 2);
-        cache.store("a", serde_json::json!(1));
-        cache.store("b", serde_json::json!(2));
+        cache.store("a", Arc::new(serde_json::json!(1)));
+        cache.store("b", Arc::new(serde_json::json!(2)));
         // 摸一下 a: a 变成最近使用, 淘汰时该走 b
         assert!(cache.get("a").is_some());
-        cache.store("c", serde_json::json!(3));
+        cache.store("c", Arc::new(serde_json::json!(3)));
         assert_eq!(cache.len(), 2, "容量上限必须守住");
         assert!(cache.get("a").is_some(), "刚用过的 a 不该被淘汰");
         assert!(cache.get("b").is_none(), "最久未用的 b 应被淘汰");
@@ -573,8 +654,8 @@ mod tests {
     #[test]
     fn clear_drops_everything() {
         let cache = ReadCache::default();
-        cache.store("a", serde_json::json!(1));
-        cache.store("b", serde_json::json!(2));
+        cache.store("a", Arc::new(serde_json::json!(1)));
+        cache.store("b", Arc::new(serde_json::json!(2)));
         cache.clear();
         assert!(cache.is_empty());
     }
@@ -606,5 +687,54 @@ mod tests {
             .expect("取消后该 key 仍应可用");
         assert_eq!(ok["n"], 1);
         assert!(cache.lock().inflight.is_empty(), "正常结束后同样不留条目");
+    }
+
+    #[tokio::test]
+    async fn hit_shares_the_body_arc_instead_of_deep_copying() {
+        // 1000 首歌单的 body 是 1–3MB: 每次命中深拷贝一次是白白的 MB 级 alloc(审计 R1)
+        let cache = ReadCache::default();
+        let fetcher = Fetcher::default();
+        let key = cache_key(endpoint::PLAYLIST_TRACK_ALL, &[("id", "1".into())]);
+        let first = cache
+            .get_or_load(endpoint::PLAYLIST_TRACK_ALL, &key, || fetcher.load("big"))
+            .await
+            .expect("load 应成功");
+        let second = cache
+            .get_or_load(endpoint::PLAYLIST_TRACK_ALL, &key, || fetcher.load("big"))
+            .await
+            .expect("命中应成功");
+        assert_eq!(fetcher.calls(), 1);
+        assert!(
+            Arc::ptr_eq(&first, &second),
+            "命中必须复用同一个 Arc, 不能深拷贝 body"
+        );
+    }
+
+    #[test]
+    fn byte_budget_evicts_lru_and_skips_oversized_entry() {
+        let cache = ReadCache::with_byte_budget(Duration::from_secs(300), 100, 200, 150);
+        let small = || Arc::new(serde_json::json!({ "k": "0123456789abcdef" }));
+        cache.store("a", small());
+        cache.store("b", small());
+        let used = cache.bytes();
+        assert!(used > 0, "字节账要真的记");
+
+        // 继续塞, 直到超预算: 淘汰最久未用的 a
+        for i in 0..40 {
+            cache.store(&format!("n{i}"), small());
+        }
+        assert!(
+            cache.bytes() <= 200,
+            "总字节必须守住预算, 实际 {}",
+            cache.bytes()
+        );
+        assert!(cache.get("a").is_none() || cache.len() < 40);
+
+        // 单条超上限(>150 字节)不入池
+        let huge = Arc::new(serde_json::json!({ "k": "x".repeat(400) }));
+        let before = cache.len();
+        cache.store("huge", huge);
+        assert_eq!(cache.len(), before, "超大单条不该进缓存");
+        assert!(cache.get("huge").is_none());
     }
 }

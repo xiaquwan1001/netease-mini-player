@@ -420,6 +420,8 @@ impl NeteaseProvider {
                 Ok(resp.body)
             })
             .await
+            // 缓存命中是 `Arc<Value>`, 这里解成 owned(调用方要的是 `Value`, 与未命中路径一致)
+            .map(|body| body.as_ref().clone())
     }
 
     /// 取某一个 type 的 result 节点(失败/无命中都给 None, 供「最长匹配」兜底用)
