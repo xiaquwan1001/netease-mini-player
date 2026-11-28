@@ -353,14 +353,21 @@ impl ReadCache {
         );
     }
 
-    fn inflight_lock(&self, key: &str) -> Arc<Inflight> {
+    /// 取(或新建)该 key 的 in-flight 状态。第二个返回值 = **本次是否由我建立**。
+    ///
+    /// 为什么需要这个 bool: 登记条目的摘除是靠守卫 `Drop` 做的, 而"等待者被取消"
+    /// (Dart 侧 future 丢弃 / 组件 dispose)也会走到 `Drop` —— 只做 `Arc::ptr_eq` 的旧实现
+    /// 会让一个 follower 把 **leader 仍在执行** 的条目摘掉, 后来的调用者于是新建一把锁
+    /// 并**并发再打一次上游**(单飞失效, 正好放大风控; 2026-11-28 锁审计 #2)。
+    /// 现在只有**建立者**的守卫会摘表。
+    fn inflight_lock(&self, key: &str) -> (Arc<Inflight>, bool) {
         let mut inner = self.lock();
         if let Some(inflight) = inner.inflight.get(key) {
-            return inflight.clone();
+            return (inflight.clone(), false);
         }
         let inflight = Arc::new(Inflight::new());
         inner.inflight.insert(key.to_string(), inflight.clone());
-        inflight
+        (inflight, true)
     }
 
     fn release_inflight(&self, key: &str, inflight: &Arc<Inflight>) {
@@ -397,15 +404,17 @@ impl ReadCache {
         }
         // 同 key 单飞: 拿到这把锁的才是 leader, 其余在这里排队;
         // leader 写回缓存后它们醒来直接命中(所以锁内要再查一次)。
-        let inflight = self.inflight_lock(key);
+        let (inflight, created) = self.inflight_lock(key);
         // 登记条目的摘除靠 Drop: leader 在 `load().await` 处被取消(Dart 侧 future 丢弃 /
         // 组件 dispose)时也会走到这里 —— 以前是语句式的 `release_inflight`, 取消路径直接跳过,
         // `inflight` 里留下永久条目且该 key 的单飞语义失效。
-        let _inflight = InflightGuard {
+        //
+        // 但**只有建立者**能摘: 等待者被取消时摘掉会让 leader 的单飞失效(锁审计 #2)。
+        let _inflight = created.then(|| InflightGuard {
             cache: self,
             key,
             inflight: inflight.clone(),
-        };
+        });
         let guard = inflight.lock.lock().await;
         if let Some(hit) = self.get(key) {
             return Ok(hit);
@@ -842,5 +851,64 @@ mod tests {
         cache.store("huge", huge);
         assert_eq!(cache.len(), before, "超大单条不该进缓存");
         assert!(cache.get("huge").is_none());
+    }
+
+    /// 等待者(follower)被取消**不能**摘掉 leader 仍在用的 in-flight 条目 ——
+    /// 摘了会让后来的调用者新建一把锁并发再打一次上游(锁审计 #2)。
+    #[tokio::test]
+    async fn cancelled_follower_keeps_the_leader_inflight_entry() {
+        let cache = Arc::new(ReadCache::default());
+        let fetcher = Arc::new(Fetcher::default());
+        let key = cache_key(endpoint::CLOUDSEARCH, &[("keywords", "follower".into())]);
+
+        // leader: load 永远挂着, 只有外部取消才结束
+        let leader_cache = Arc::clone(&cache);
+        let leader_key = key.clone();
+        let leader = tokio::spawn(async move {
+            leader_cache
+                .get_or_load(endpoint::CLOUDSEARCH, &leader_key, || async {
+                    std::future::pending::<()>().await;
+                    Ok(serde_json::json!({}))
+                })
+                .await
+        });
+        // 等 leader 真的登记好(轮询, 不靠 sleep 猜时间)
+        for _ in 0..200 {
+            if !cache.lock().inflight.is_empty() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        assert_eq!(cache.lock().inflight.len(), 1, "leader 已登记");
+
+        // follower 进来排队后立刻被取消(drop future)
+        let follower_cache = Arc::clone(&cache);
+        let follower_key = key.clone();
+        let follower_fetcher = Arc::clone(&fetcher);
+        let follower = tokio::spawn(async move {
+            follower_cache
+                .get_or_load(endpoint::CLOUDSEARCH, &follower_key, || async {
+                    follower_fetcher.load("follower").await
+                })
+                .await
+        });
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        follower.abort();
+        let _ = follower.await;
+
+        assert_eq!(
+            cache.lock().inflight.len(),
+            1,
+            "follower 被取消不能摘掉 leader 的条目(否则单飞失效)"
+        );
+        assert_eq!(fetcher.calls(), 0, "follower 取消前不该打上游");
+
+        // leader 收尾后条目照样清干净
+        leader.abort();
+        let _ = leader.await;
+        assert!(
+            cache.lock().inflight.is_empty(),
+            "创建者取消仍要摘表(不会留死条目)"
+        );
     }
 }
