@@ -144,8 +144,14 @@ pub async fn lyric(track_id: u64) -> Result<String, FfiError> {
 /// 账号本身留在账号簿里, 下次可以一键切回(不用重新扫码).
 /// 返回 true 表示现在已经不是登录态.
 pub fn logout() -> Result<bool, FfiError> {
+    let (store, session) = (store_handle()?, session_snapshot()?);
+    let next = ncm_service::identity::logout_session(&session);
+    let mut book = store.load_accounts().map_err(FfiError::from)?;
+    book.clear_active();
+    store.save(&next).map_err(FfiError::from)?;
+    store.save_accounts(&book).map_err(FfiError::from)?;
     let mut guard = core()?.lock().map_err(FfiError::from)?;
-    guard.logout().map_err(FfiError::from)?;
+    guard.commit_session(next);
     Ok(!guard.session.is_logged_in())
 }
 
@@ -243,6 +249,27 @@ fn accounts_of(guard: &Core) -> Result<Vec<AccountDto>, FfiError> {
         .collect())
 }
 
+// ---------------- 账号/登录写路径的锁纪律(锁审计 #1) ----------------
+//
+// 凭据落盘(`IdentityStore::save`/`save_accounts`)走钥匙串 `set_password`(zbus 阻塞,
+// **无超时**) + `fsutil` 的 fsync. 持全局 `Core` 锁做这些 ⇒ 钥匙串被锁时这一条永不返回,
+// 全进程所有 FFI 入口(含 init/poll) 一起挂.
+//
+// 所以写路径一律三段:
+// ① 短锁取 [store 句柄](store_handle)/[会话快照](session_snapshot) + 算下一份快照;
+// ② **锁外** `store.save`/`store.save_accounts`/后端探测;
+// ③ 短锁 `commit_session` 只提交内存态(落盘失败 ⇒ 内存态不前进).
+
+/// 短锁取 store 共享句柄(之后的阻塞 IO 都在锁外做).
+fn store_handle() -> Result<std::sync::Arc<ncm_service::IdentityStore>, FfiError> {
+    Ok(core()?.lock().map_err(FfiError::from)?.store_handle())
+}
+
+/// 短锁取会话快照(设备指纹/登录态只读一份内存拷贝).
+fn session_snapshot() -> Result<ncm_domain::Session, FfiError> {
+    Ok(core()?.lock().map_err(FfiError::from)?.session.clone())
+}
+
 /// 扫码登录 ①(桌面端官方网页登录通道): 申请二维码.
 ///
 /// 桌面端没有 WebView, 也就无法读浏览器里 HttpOnly 的 MUSIC_U; 官方扫码通道把凭据
@@ -271,8 +298,8 @@ pub async fn login_qr_check(
         .await
         .map_err(FfiError::from)?;
     if let Some(cookie) = outcome.cookie.as_deref() {
-        let mut guard = core()?.lock().map_err(FfiError::from)?;
-        guard.apply_login_cookie(cookie).map_err(FfiError::from)?;
+        let next = ncm_service::identity::login_session(&session_snapshot()?, cookie);
+        ncm_service::persist_session(core()?, next).map_err(FfiError::from)?;
     }
     // 凭据到此为止: 只把元数据交给 Dart
     Ok(outcome.check)
@@ -310,11 +337,12 @@ pub fn credential_status() -> Result<CredentialStatusDto, FfiError> {
 // 「同意门」在 UI 侧还没落地, 落地时去掉 `#[frb(ignore)]` 复用本函数, 不要重写一遍。
 #[frb(ignore)]
 pub fn consent_plaintext_storage(consent: bool) -> Result<CredentialStatusDto, FfiError> {
-    let mut guard = core()?.lock().map_err(FfiError::from)?;
-    guard
+    // 策略落盘 + 后端探测(2s 上限) + 迁移全在锁外: 见本文件「锁纪律」注释
+    let store = store_handle()?;
+    store
         .set_plaintext_consent(consent)
         .map_err(FfiError::from)?;
-    Ok(credential_status_dto(guard.credential_status()))
+    Ok(credential_status_dto(store.credential_status()))
 }
 
 /// Android Keystore 桥(lane p1, 方案 B): Keystore 里的一条凭据.
@@ -394,10 +422,8 @@ pub async fn login_sms_verify(
         .login_sms_verify(&phone, &code, &country_code)
         .await
         .map_err(FfiError::from)?;
-    let mut guard = core()?.lock().map_err(FfiError::from)?;
-    guard
-        .apply_login_cookie(&outcome.cookie)
-        .map_err(FfiError::from)?;
+    let next = ncm_service::identity::login_session(&session_snapshot()?, &outcome.cookie);
+    ncm_service::persist_session(core()?, next).map_err(FfiError::from)?;
     Ok(outcome.result)
 }
 
@@ -423,19 +449,21 @@ pub fn accounts() -> Result<Vec<AccountDto>, FfiError> {
 /// 登录后/启动时调用: 拉一次账号资料并记进账号簿.
 /// 失败(离线/风控)不影响已登录状态, UI 只当作"没有昵称"。
 pub async fn account_sync_active() -> Result<AccountDto, FfiError> {
-    let logged_in = {
-        let guard = core()?.lock().map_err(FfiError::from)?;
-        guard.session.is_logged_in()
-    };
-    if !logged_in {
+    let session = session_snapshot()?;
+    if !session.is_logged_in() {
         return Err(FfiError::auth("未登录"));
     }
     let profile = routed_call(Capability::Profile, |provider| {
         Box::pin(async move { provider.profile().await })
     })
     .await?;
-    let mut guard = core()?.lock().map_err(FfiError::from)?;
-    guard.remember_account(&profile).map_err(FfiError::from)?;
+    // 账号簿读写 + 会话落盘都是阻塞 IO(钥匙串), 一律在 `Core` 锁外做
+    let store = store_handle()?;
+    let book = store.load_accounts().map_err(FfiError::from)?;
+    let (book, next) = ncm_service::identity::prepare_remember(&session, book, &profile);
+    store.save_accounts(&book).map_err(FfiError::from)?;
+    store.save(&next).map_err(FfiError::from)?;
+    core()?.lock().map_err(FfiError::from)?.commit_session(next);
     Ok(AccountDto {
         user_id: profile.user_id,
         nickname: profile.nickname,
@@ -447,12 +475,16 @@ pub async fn account_sync_active() -> Result<AccountDto, FfiError> {
 
 /// 切换到账号簿里的某个账号(不重新登录)
 pub async fn account_switch(user_id: u64) -> Result<bool, FfiError> {
-    {
-        let mut guard = core()?.lock().map_err(FfiError::from)?;
-        if !guard.switch_account(user_id).map_err(FfiError::from)? {
-            return Ok(false);
-        }
-    }
+    let session = session_snapshot()?;
+    let store = store_handle()?;
+    let book = store.load_accounts().map_err(FfiError::from)?;
+    let Some((book, next)) = ncm_service::identity::prepare_switch(&session, book, user_id) else {
+        return Ok(false);
+    };
+    // 先落会话再落账号簿(与旧 apply_session → save_accounts 的顺序一致)
+    store.save(&next).map_err(FfiError::from)?;
+    store.save_accounts(&book).map_err(FfiError::from)?;
+    core()?.lock().map_err(FfiError::from)?.commit_session(next);
     // 切完顺手同步一次昵称/头像(失败不影响切换)
     let _ = account_sync_active().await;
     Ok(true)
@@ -460,10 +492,17 @@ pub async fn account_switch(user_id: u64) -> Result<bool, FfiError> {
 
 /// 从账号簿移除某个账号(不影响当前登录态, 只是忘掉它的凭据)
 pub fn account_remove(user_id: u64) -> Result<bool, FfiError> {
-    let mut guard = core()?.lock().map_err(FfiError::from)?;
-    let before = guard.accounts().map_err(FfiError::from)?.accounts.len();
-    let book = guard.forget_account(user_id).map_err(FfiError::from)?;
-    Ok(book.accounts.len() < before)
+    let store = store_handle()?;
+    let mut book = store.load_accounts().map_err(FfiError::from)?;
+    let removed = book.remove(user_id);
+    // 凭据后端里的副本一并清掉(失败不阻塞, 下次迁移不会找回它)
+    if let Some(creds) = store.credential_backend() {
+        let _ = creds.remove(ncm_service::credential_store::CredentialKey::Account(
+            user_id,
+        ));
+    }
+    store.save_accounts(&book).map_err(FfiError::from)?;
+    Ok(removed)
 }
 
 /// 导入登录 cookie(手机端/浏览器导出), 与设备指纹合并后持久化.
@@ -479,16 +518,14 @@ pub fn login_with_cookie(cookie: String) -> Result<bool, FfiError> {
         // 不合并、不改会话: 明确告诉 UI 这次没有登录态
         return Ok(false);
     }
-    let mut guard = core()?.lock().map_err(FfiError::from)?;
-    let merged = ncm_service::identity::merge_device_cookie(
-        &guard.session.cookie,
-        incoming,
-        &guard.session.device_id,
-    );
-    let mut next = guard.session.clone();
-    next.cookie = merged;
-    guard.apply_session(next).map_err(FfiError::from)?;
-    Ok(guard.session.is_logged_in())
+    let next = ncm_service::identity::login_session(&session_snapshot()?, incoming);
+    // 落盘(钥匙串 put, 无超时)在锁外; 成功后短锁只提交内存态
+    ncm_service::persist_session(core()?, next).map_err(FfiError::from)?;
+    Ok(core()?
+        .lock()
+        .map_err(FfiError::from)?
+        .session
+        .is_logged_in())
 }
 
 // 登录 cookie 判据(原在 api.rs 末尾, 按域归到登录): 这次拿到的 cookie 里真有 MUSIC_U 才算登录。

@@ -159,53 +159,12 @@ impl Core {
         self.store.load_accounts()
     }
 
-    /// 登录成功后记住这个账号(只存登录凭据, 指纹共享), 并设为当前账号
-    pub fn remember_account(
-        &mut self,
-        profile: &ncm_domain::Profile,
-    ) -> std::io::Result<AccountBook> {
-        let (book, next) =
-            identity::prepare_remember(&self.session, self.store.load_accounts()?, profile);
-        self.store.save_accounts(&book)?;
-        self.apply_session(next)?;
-        Ok(book)
-    }
-
-    /// 直接切到已保存的账号(不用重新登录); 返回是否切换成功
-    pub fn switch_account(&mut self, user_id: u64) -> std::io::Result<bool> {
-        let Some((book, next)) =
-            identity::prepare_switch(&self.session, self.store.load_accounts()?, user_id)
-        else {
-            return Ok(false);
-        };
-        self.apply_session(next)?;
-        self.store.save_accounts(&book).map(|_| true)
-    }
-
     /// 把外部拿到的登录凭据(网页/扫码登录)合并进会话并落盘: 设备指纹保留.
+    ///
+    /// 阻塞(钥匙串写) ⇒ 只在已经持锁的旧调用点(cli)用; FFI 走
+    /// [`identity::login_session`] + [`persist_session`] 在锁外落盘.
     pub fn apply_login_cookie(&mut self, incoming: &str) -> std::io::Result<()> {
         self.apply_session(identity::login_session(&self.session, incoming))
-    }
-
-    /// 从账号簿移除(不改变当前登录态, 只是忘掉这个账号的凭据)
-    pub fn forget_account(&mut self, user_id: u64) -> std::io::Result<AccountBook> {
-        let mut book = self.store.load_accounts()?;
-        book.remove(user_id);
-        // 凭据后端里的副本一并清掉(失败不阻塞, 下次迁移不会找回它)
-        if let Some(creds) = self.store.credential_backend() {
-            let _ = creds.remove(credential_store::CredentialKey::Account(user_id));
-        }
-        self.store.save_accounts(&book)?;
-        Ok(book)
-    }
-
-    /// 退出登录: 清凭据(账号仍留在账号簿里, 下次可一键切回)
-    pub fn logout(&mut self) -> std::io::Result<AccountBook> {
-        self.apply_session(identity::logout_session(&self.session))?;
-        let mut book = self.store.load_accounts()?;
-        book.clear_active();
-        self.store.save_accounts(&book)?;
-        Ok(book)
     }
 
     pub fn capabilities(&self, provider_id: &str) -> Option<&'static [Capability]> {
@@ -215,15 +174,6 @@ impl Core {
     /// 凭据后端状态(给 FFI/UI 上报: 是否安全后端 / 明文回退原因)
     pub fn credential_status(&self) -> CredentialStatus {
         self.store.credential_status()
-    }
-
-    /// 用户明确同意/撤销"0600 明文回退"(设置页入口). 同意后立即重建后端并
-    /// 补跑一次迁移(把仍在明文里的凭据搬走); 撤销只写标记, 不删已有明文.
-    ///
-    /// 阻塞(后端探测 2s + 钥匙串写) ⇒ FFI 走 [`Core::store_handle`] 在锁外调
-    /// [`IdentityStore::set_plaintext_consent`](identity::IdentityStore::set_plaintext_consent).
-    pub fn set_plaintext_consent(&mut self, consent: bool) -> std::io::Result<()> {
-        self.store.set_plaintext_consent(consent)
     }
 }
 
