@@ -49,8 +49,37 @@ done
 
 LIB="ui/lib/src"
 
+# 依赖: ripgrep **不是**所有环境都有(GitHub ubuntu runner 就没有, 2026-11-28 实测
+# v0.41.11 的 CI 因此红在这道门上 —— 找不到 rg ⇒ 0 命中 ⇒ 触发下面的"假绿"保护)。
+# 两个辅助函数把"按行扫描"收成一处, 有 rg 用 rg, 否则退回 grep -r。
+scan_files() { # scan_files <regex>  → 命中的文件路径
+  local re=$1
+  if command -v rg >/dev/null 2>&1; then
+    rg -l --no-heading -e "$re" "$LIB" 2>/dev/null || true
+  else
+    grep -rlE --exclude-dir=rust "$re" "$LIB" 2>/dev/null || true
+  fi
+}
+
+scan_lines() { # scan_lines <regex> [file-only-print] → path:line:text(或只打匹配到的行文本)
+  local re=$1 mode=${2:-}
+  if command -v rg >/dev/null 2>&1; then
+    if [ "$mode" = "text" ]; then
+      rg -N --no-filename -e "$re" "$LIB" 2>/dev/null || true
+    else
+      rg -n --no-heading -e "$re" "$LIB" 2>/dev/null || true
+    fi
+  else
+    if [ "$mode" = "text" ]; then
+      grep -rhE --exclude-dir=rust "$re" "$LIB" 2>/dev/null || true
+    else
+      grep -rnE --exclude-dir=rust "$re" "$LIB" 2>/dev/null || true
+    fi
+  fi
+}
+
 # 槽位的声明文件 + 壳层装配文件(槽位换文件时这里自动跟着变)。
-OWNER_FILES=$(rg -l --no-heading -e '^final ValueNotifier' "$LIB" 2>/dev/null || true)
+OWNER_FILES=$(scan_files '^final ValueNotifier')
 if [ -z "$OWNER_FILES" ]; then
   echo "::error::没发现任何顶格 ValueNotifier —— 正则或目录写错了(本门会假绿)"
   exit 1
@@ -60,7 +89,7 @@ ui/lib/src/home/home_wiring.dart"
 
 # 槽位名: 顶格 final ValueNotifier<...> name = 里的 name(泛型可能含空格与嵌套 >)
 slot_names() {
-  rg -N --no-filename -e '^final ValueNotifier' "$LIB" 2>/dev/null \
+  scan_lines '^final ValueNotifier' text \
     | sed -n 's/^final[[:space:]]\{1,\}ValueNotifier.*>[[:space:]]\{1,\}\([A-Za-z_][A-Za-z0-9_]*\)[[:space:]]*=[[:space:]]*.*$/\1/p' \
     | sort -u
 }
@@ -79,7 +108,7 @@ allow_re=$(printf '%s\n' "$ALLOW_FILES" | sed 's/[.]/\\./g' | paste -sd'|' -)
 ALLOW="^($allow_re):"
 
 scan() {
-  rg -n --no-heading -e "$PATTERN" "$LIB" 2>/dev/null \
+  scan_lines "$PATTERN" \
     | grep -Ev '^.*:[0-9]+:[[:space:]]*//' \
     | grep -Ev "$ALLOW" || true
 }
