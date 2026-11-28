@@ -84,6 +84,11 @@ class _HomePageState extends State<HomePage> {
   /// src/home/playback_coordinator.dart。依赖在 initState 里注入, 不持 BuildContext。
   late final PlaybackCoordinator _coordinator;
 
+  /// 播放态「结构性快照」: 只有曲目/播放态/时长/seek 能力/音量这些字段变化才
+  /// 需要重建整页。纯位置 tick(常态 500ms、歌词展开期 120ms)只刷新播放条快照,
+  /// 不 setState —— 否则 IndexedStack 里所有访问过的 tab 都会被重建一遍。
+  Object? _playbackStructKey;
+
   /// 歌曲动作宿主装配(拆壳 S5): 宿主构建与歌曲/艺人/专辑动作闭包都在
   /// src/home/song_action_wiring.dart, 这里只注入页面状态与导航回调。
   late final SongActionWiring _songActions;
@@ -473,6 +478,7 @@ class _HomePageState extends State<HomePage> {
       focusNode: _searchFocus,
       search: _search,
     );
+    _playbackStructKey = _playbackStructKeyOf(_coordinator.player);
     _startup.bootstrap();
     _coordinator.startPolling();
   }
@@ -567,10 +573,37 @@ class _HomePageState extends State<HomePage> {
     unawaited(_songActions.openComments(song));
   }
 
-  /// 播放协调器有变更时重建(与拆分前每处 setState(赋值 _player) 等价)。
+  /// 播放协调器有变更: 结构性字段变了才重建整页, 纯位置 tick 只刷新播放条。
+  ///
+  /// 位置 tick 由 500ms 轮询(歌词展开期 120ms ticker 复用同一 [poll])驱动,
+  /// 它的唯一真实消费者是 [_publishPlayerBar]; 整页 setState 会让 IndexedStack
+  /// 里所有访问过的 tab 拿到新 widget 实例并全部 build 一次。
   void _onPlaybackChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final player = _coordinator.player;
+    final key = _playbackStructKeyOf(player);
+    if (key != _playbackStructKey) {
+      _playbackStructKey = key;
+      setState(() {});
+      return;
+    }
+    // 纯位置 tick: 只投递播放条快照。投递是帧后写全局槽位, 这里不再 setState,
+    // 需要显式排一帧让帧后回调跑起来(否则播放条进度会停在上一帧)。
+    _publishPlayerBar(context, player, _current);
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
+
+  /// 结构性字段(不含 positionMs): 位置变化不改变它。
+  static Object _playbackStructKeyOf(PlayerView? p) => p == null
+      ? const <Object?>[]
+      : (
+          p.trackId,
+          p.playing,
+          p.durationMs,
+          p.seekable,
+          p.pendingSeekMs,
+          p.volume,
+        );
 
   /// 定时关闭到点: 停止播放 + 退出应用。
   ///
