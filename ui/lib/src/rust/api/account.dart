@@ -9,7 +9,7 @@ import 'library.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `accounts_of`, `cookie_has_music_u`, `credential_status_dto`
+// These functions are ignored because they are not marked as `pub`: `accounts_of`, `cookie_has_music_u`, `credential_status_dto`, `session_snapshot`, `store_handle`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `fmt`, `fmt`
 // These functions are ignored (category: IgnoreBecauseExplicitAttribute): `consent_plaintext_storage`
 

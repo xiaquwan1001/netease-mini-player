@@ -7,10 +7,26 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `core`, `data_dir_default`, `data_dir`, `inited_or_open`, `inited`, `plugin_host`, `program_dto`, `routed_call`, `song_dto`, `song_from_dto`, `with_provider`
+// These functions are ignored because they are not marked as `pub`: `core`, `data_dir`, `inited_or_open`, `inited`, `plugin_host`, `program_dto`, `routed_call`, `song_dto`, `song_from_dto`, `with_provider`
 // These types are ignored because they are neither used by any `pub` functions nor (for structs and enums) marked `#[frb(unignore)]`: `Inited`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `clone`, `eq`, `fmt`, `fmt`, `from`, `from`, `from`, `from`, `from`, `from`
 // These functions have error during generation (see debug logs or enable `stop_on_error: true` for more details): `auth`, `internal`, `network`, `new`, `unsupported`
+
+/// 桌面端默认数据目录(P-18 后半): `~/.local/share/io.github.xiaquwan1001.MiniNCM`.
+///
+/// - `$NCM_DATA_DIR` 是显式指定 ⇒ 原样使用, **不参与迁移**(测试/多实例靠它隔离)。
+/// - 其余情况(默认路径)在返回前做一次**一次性迁移**: 新目录缺失且旧目录
+///   (`~/.local/share/ncm`) 存在 ⇒ 搬过去, 失败则回退为继续用旧目录。
+///   迁移发生在这里(init 里、`Core::open` 之前), 保证没有任何缓存/凭据/播放状态文件
+///   在迁移完成前被打开。规则细节见 `ncm_service::fsutil` 模块注释。
+/// - Android 走平台通道传私有目录(`data_dir = Some`), 不经过本函数。
+///
+/// 这个函数也**直接暴露给 UI**(`rust.dataDirDefault()`): 启动时要在 `runApp` 之前读
+/// `settings.json`(否则首帧用默认主题、设置加载完再翻一次 —— 缓存审计 P2 的「首帧主题闪」),
+/// 而那一步只需要目录**路径**, 不需要 `init()` 打开 `Core`(keystore 恢复/D-Bus 探测都在
+/// `init` 里, 挪到首帧前会拖慢启动)。两个调用点拿到的是同一个路径, 迁移也只发生一次。
+Future<String> dataDirDefault() =>
+    RustLib.instance.api.crateApiDataDirDefault();
 
 /// 初始化: 建立/加载身份, 注册 provider. 幂等.
 ///

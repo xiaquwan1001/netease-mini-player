@@ -12,6 +12,7 @@ import 'update_checker.dart' show compareVersions;
 ///
 /// 发版时在这里加一条即可; 没有条目的版本不显示公告(不是每个 patch 都值得说)。
 const Map<String, List<String>> kReleaseHighlights = <String, List<String>>{
+  'v0.42.2': <String>['启动不再先闪一下浅色: 深色/OLED/自定义配色的设置现在在第一帧之前就已生效'],
   'v0.42.1': <String>[
     '安装包更小: 打开代码与资源压缩(release 包省 3.4MB, 安卓 dex 从 12.8MB 降到 2.8MB)',
     '已在安卓模拟器与 Linux AppImage 上实测: 安装/冷启动/播放/通知五按钮/分享 全部正常',

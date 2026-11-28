@@ -386,6 +386,9 @@ class _PlayerBarChrome extends StatelessWidget {
 class MiniNcmApp extends StatelessWidget {
   const MiniNcmApp({super.key});
 
+  /// 只在首次构建时打一条: 用来对账"首帧拿到的是已加载的设置"(见 main.dart 的注释)。
+  static bool _loggedFirstBuild = false;
+
   @override
   Widget build(BuildContext context) {
     // 只订阅**外观**域: 主题色/OLED/字号是这里唯一吃的东西。
@@ -395,6 +398,13 @@ class MiniNcmApp extends StatelessWidget {
       domains: const {AppSettingsDomain.appearance},
       builder: (context) {
         final settings = AppSettings.instance;
+        if (!_loggedFirstBuild) {
+          _loggedFirstBuild = true;
+          debugPrint(
+            '[NCM-BOOT] MiniNcmApp 首帧构建: settingsLoaded=${settings.loaded} '
+            'themeMode=${settings.themeMode.name}',
+          );
+        }
         return MaterialApp(
           title: '轻音 MiniNCM',
           // 桌面也能拖动滚动(见 [AppScrollBehavior]): 下拉刷新才不会只在手机上可用

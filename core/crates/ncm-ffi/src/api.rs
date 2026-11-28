@@ -225,7 +225,12 @@ macro_rules! ffi_forward {
 ///   迁移发生在这里(init 里、`Core::open` 之前), 保证没有任何缓存/凭据/播放状态文件
 ///   在迁移完成前被打开。规则细节见 `ncm_service::fsutil` 模块注释。
 /// - Android 走平台通道传私有目录(`data_dir = Some`), 不经过本函数。
-fn data_dir_default() -> String {
+///
+/// 这个函数也**直接暴露给 UI**(`rust.dataDirDefault()`): 启动时要在 `runApp` 之前读
+/// `settings.json`(否则首帧用默认主题、设置加载完再翻一次 —— 缓存审计 P2 的「首帧主题闪」),
+/// 而那一步只需要目录**路径**, 不需要 `init()` 打开 `Core`(keystore 恢复/D-Bus 探测都在
+/// `init` 里, 挪到首帧前会拖慢启动)。两个调用点拿到的是同一个路径, 迁移也只发生一次。
+pub fn data_dir_default() -> String {
     if let Ok(explicit) = std::env::var("NCM_DATA_DIR") {
         return explicit;
     }
