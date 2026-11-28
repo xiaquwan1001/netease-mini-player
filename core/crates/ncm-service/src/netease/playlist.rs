@@ -260,8 +260,8 @@ impl NeteaseProvider {
                     &key,
                     || async {
                         let (client, domain, ua, cookie) = self.snapshot();
-                        let q = make_query(&cookie, &domain, &ua)
-                            .param("id", &playlist_id.to_string());
+                        let q =
+                            make_query(&cookie, &domain, &ua).param("id", &playlist_id.to_string());
                         let resp = client.playlist_track_all(&q).await.map_err(map_error)?;
                         check_body(&resp.body)?;
                         Ok(resp.body)
